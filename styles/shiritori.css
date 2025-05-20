@@ -1,0 +1,415 @@
+.shiritori-game {
+  background: #fff;
+  padding: 1rem;
+  border-radius: 20px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  width: 95%;
+  max-width: 1000px;
+  min-height: 600px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+}
+
+.shiritori-game .shiritori-history-area {
+  width: 100%;
+  min-height: 120px;
+  font-size: 2.2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 2.5rem;
+  flex-wrap: wrap;
+  gap: 1rem;
+  font-weight: bold;
+  color: #3e2723;
+  text-align: center;
+}
+
+.shiritori-game .shiritori-players-area {
+  display: flex;
+  width: 100%;
+  gap: 2rem;
+  justify-content: center;
+  margin-bottom: 2rem;
+}
+
+.shiritori-game .shiritori-player-area {
+  flex: 1 1 0;
+  min-width: 300px;
+  max-width: 450px;
+  background: #f8f9fa;
+  border-radius: 20px;
+  padding: 1.5rem 1.2rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+}
+
+.shiritori-game .shiritori-player-title {
+  font-size: 1.5rem;
+  font-weight: bold;
+  margin-bottom: 1rem;
+  color: #4a3c1a;
+}
+
+.shiritori-game .shiritori-player-words {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  justify-content: center;
+  margin-top: 1rem;
+}
+
+.shiritori-game .shiritori-controls {
+  display: flex;
+  justify-content: center;
+  gap: 1.5rem;
+  margin-top: 2rem;
+}
+
+.shiritori-game .restart-button,
+.shiritori-game .close-button {
+  padding: 0.8rem 2.2rem;
+  background: linear-gradient(135deg, #fffde4 0%, #f9c6ff 100%);
+  border: 2px solid #f48fb1;
+  border-radius: 30px;
+  color: #d72660;
+  font-size: 1.2rem;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.shiritori-game .restart-button:hover,
+.shiritori-game .close-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(244, 143, 177, 0.3);
+}
+
+.shiritori-game .restart-button:active,
+.shiritori-game .close-button:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 8px rgba(244, 143, 177, 0.2);
+}
+
+.shiritori-game .shiritori-history-word {
+  font-weight: bold;
+  color: #3e2723;
+  margin: 0 0.3rem;
+  font-size: 2.4rem;
+}
+
+.shiritori-game .shiritori-history-word.wrong-word {
+  color: #ff0000;
+  opacity: 0.8;
+  font-size: 2.4rem;
+  font-weight: bold;
+}
+
+.shiritori-game .shiritori-history-arrow {
+  color: #bdbdbd;
+  font-size: 2.4rem;
+  margin: 0 0.4rem;
+}
+
+.shiritori-game .game-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+}
+
+.shiritori-game .game-header h2 {
+  font-family: 'M PLUS Rounded 1c', sans-serif;
+  font-size: 1.8rem;
+  color: #333;
+  margin: 0;
+}
+
+.shiritori-game .turn-display {
+  font-family: 'M PLUS Rounded 1c', sans-serif;
+  font-size: 1.3rem;
+  color: #d72660;
+  font-weight: bold;
+}
+
+.shiritori-game .current-word {
+  font-family: 'M PLUS Rounded 1c', sans-serif;
+  font-size: 1.6rem;
+  color: #333;
+  text-align: center;
+  margin-bottom: 1.5rem;
+  padding: 0.8rem;
+  background: #f8f9fa;
+  border-radius: 10px;
+}
+
+.shiritori-game .word-history {
+  background: #f8f9fa;
+  border-radius: 10px;
+  padding: 0.8rem;
+  margin-bottom: 1.5rem;
+  min-height: 120px;
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+.shiritori-game .word-item {
+  font-family: 'M PLUS Rounded 1c', sans-serif;
+  font-size: 1.1rem;
+  color: #333;
+  padding: 0.4rem;
+  border-bottom: 1px solid #dee2e6;
+}
+
+.shiritori-game .word-item:last-child {
+  border-bottom: none;
+}
+
+.shiritori-game .choices-container {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 0.8rem;
+  margin-bottom: 1.5rem;
+}
+
+.shiritori-game .choice-button {
+  font-size: 1.2rem;
+  padding: 0.7rem 1.5rem;
+  border-radius: 2rem;
+  background: linear-gradient(135deg, #e3f2fd 0%, #90caf9 100%);
+  border: 2px solid #42a5f5;
+  color: #1565c0;
+  font-weight: bold;
+  cursor: pointer;
+  box-shadow: 0 4px 16px #90caf966, 0 1.5px 4px #42a5f5;
+  margin: 0.18rem;
+  transition: background 0.2s, color 0.2s, transform 0.15s, box-shadow 0.15s;
+}
+
+.shiritori-game .choice-button:hover {
+  background: linear-gradient(135deg, #90caf9 0%, #e3f2fd 100%);
+  color: #0d47a1;
+  transform: translateY(-4px) scale(1.06);
+  box-shadow: 0 8px 24px #42a5f544, 0 2px 8px #90caf9;
+}
+
+.shiritori-game .choice-button:active {
+  filter: brightness(0.97);
+  transform: scale(0.98);
+}
+
+.shiritori-game .message {
+  font-family: 'M PLUS Rounded 1c', sans-serif;
+  font-size: 1rem;
+  color: #d72660;
+  text-align: center;
+  margin-bottom: 0.8rem;
+}
+
+.shiritori-game .result-display {
+  text-align: center;
+  margin: 1.5rem 0;
+}
+
+.shiritori-game .player-time {
+  font-family: 'M PLUS Rounded 1c', sans-serif;
+  font-size: 1.3rem;
+  margin: 0.8rem 0;
+}
+
+.shiritori-game .player-label {
+  color: #333;
+  margin-right: 0.8rem;
+}
+
+.shiritori-game .time-value {
+  color: #d72660;
+  font-weight: bold;
+}
+
+.winner-announcement {
+  font-family: 'M PLUS Rounded 1c', sans-serif;
+  font-size: 2.2rem;
+  color: #d72660;
+  font-weight: bold;
+  margin: 1.5rem 0;
+  animation: shiritori-bounce 0.5s ease infinite;
+  letter-spacing: 0.1em;
+  text-shadow: 0 2px 8px #fff3;
+}
+
+@keyframes shiritori-bounce {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
+@keyframes bounce {
+  0%, 100% { transform: translateY(0);}
+  50% { transform: translateY(-20px);}
+}
+
+.winner-emoji {
+  animation: bounce 1s infinite;
+}
+
+.result-times {
+  display: flex;
+  justify-content: center;
+  gap: 2.5rem;
+  margin-bottom: 2rem;
+}
+
+.result-time-row {
+  display: flex;
+  align-items: center;
+  font-size: 1.5rem;
+}
+
+.shiritori-controls button {
+  font-size: 1.3rem;
+  padding: 1rem 2.5rem;
+  border-radius: 30px;
+  margin: 0 1rem;
+  transition: background 0.2s, transform 0.2s;
+}
+
+.shiritori-controls .restart-button {
+  background: linear-gradient(90deg, #ffe082 0%, #ff9800 100%);
+  color: #fff;
+  border: none;
+}
+
+.shiritori-controls .close-button {
+  background: linear-gradient(90deg, #b3e5fc 0%, #2196f3 100%);
+  color: #fff;
+  border: none;
+}
+
+.shiritori-controls button:hover {
+  transform: scale(1.08);
+  filter: brightness(1.1);
+}
+
+.shiritori-game {
+  background: #fff;
+  border-radius: 24px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.10);
+  padding: 2.5rem 2rem;
+}
+
+.shiritori-history-area {
+  font-size: 2.2rem;
+  margin-bottom: 2.5rem;
+  min-height: 120px;
+  font-weight: bold;
+  color: #3e2723;
+  text-align: center;
+}
+
+.shiritori-history-word {
+  margin: 0 0.3rem;
+}
+
+.shiritori-history-arrow {
+  color: #bdbdbd;
+  font-size: 2rem;
+}
+
+.shiritori-players-area {
+  display: flex;
+  gap: 2.5rem;
+  justify-content: center;
+  margin-bottom: 2.5rem;
+}
+
+.shiritori-player-area {
+  background: #f8f9fa;
+  border-radius: 20px;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+  padding: 2rem 1.5rem;
+  min-width: 320px;
+  max-width: 480px;
+  flex: 1 1 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  transition: box-shadow 0.2s, border 0.2s;
+}
+
+.shiritori-player-area.active {
+  border: 3px solid #ffe082;
+  box-shadow: 0 4px 24px #ffe08244;
+}
+
+.shiritori-player-title {
+  display: flex;
+  align-items: center;
+  font-size: 1.7rem;
+  margin-bottom: 1.2rem;
+}
+
+.player-icon {
+  margin-right: 0.5rem;
+}
+
+.shiritori-player-words {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  justify-content: center;
+  margin-top: 1rem;
+}
+
+.choice-button {
+  font-size: 1.2rem;
+  padding: 0.7rem 1.5rem;
+  border-radius: 2rem;
+  background: linear-gradient(135deg, #e3f2fd 0%, #90caf9 100%);
+  border: 2px solid #42a5f5;
+  color: #1565c0;
+  font-weight: bold;
+  cursor: pointer;
+  box-shadow: 0 4px 16px #90caf966, 0 1.5px 4px #42a5f5;
+  margin: 0.18rem;
+  transition: background 0.2s, color 0.2s, transform 0.15s, box-shadow 0.15s;
+}
+
+.choice-button:hover {
+  background: linear-gradient(135deg, #90caf9 0%, #e3f2fd 100%);
+  color: #0d47a1;
+  transform: translateY(-4px) scale(1.06);
+  box-shadow: 0 8px 24px #42a5f544, 0 2px 8px #90caf9;
+}
+
+.choice-button:active {
+  filter: brightness(0.97);
+  transform: scale(0.98);
+}
+
+.shiritori-history-word.wrong-word {
+  color: #ff0000;
+  opacity: 0.8;
+  font-size: 2.4rem;
+  font-weight: bold;
+}
+
+.shiritori-history-arrow {
+  color: #bdbdbd;
+  font-size: 2.4rem;
+  margin: 0 0.4rem;
+}
+
+.shiritori-history-word {
+  font-size: 2.4rem;
+  font-weight: bold;
+  color: #3e2723;
+} 

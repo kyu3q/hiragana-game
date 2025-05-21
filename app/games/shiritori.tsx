@@ -1,7 +1,10 @@
+import { Ionicons } from '@expo/vector-icons';
+import { Audio } from 'expo-av';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import { Animated, Dimensions, Text, TouchableOpacity, View } from 'react-native';
 import GameLayout from '../../components/common/GameLayout';
+import GameMenu from '../../components/common/GameMenu';
 import { shiritoriData as hiraganaData } from '../../constants/games/shiritoriHiragana';
 import { shiritoriData as katakanaData } from '../../constants/games/shiritoriKatakana';
 import { styles } from '../../styles/shiritori.styles';
@@ -24,6 +27,21 @@ const yoonMapHiragana: { [key: string]: string } = {
   'ゃ': 'や', 'ゅ': 'ゆ', 'ょ': 'よ',
 };
 
+const yoonInitialsHiragana: { [key: string]: string[] } = {
+  'り': ['りゃ', 'りゅ', 'りょ'],
+  'し': ['しゃ', 'しゅ', 'しょ'],
+  'ち': ['ちゃ', 'ちゅ', 'ちょ'],
+  'き': ['きゃ', 'きゅ', 'きょ'],
+  'ぎ': ['ぎゃ', 'ぎゅ', 'ぎょ'],
+  'じ': ['じゃ', 'じゅ', 'じょ'],
+  'に': ['にゃ', 'にゅ', 'にょ'],
+  'ひ': ['ひゃ', 'ひゅ', 'ひょ'],
+  'び': ['びゃ', 'びゅ', 'びょ'],
+  'ぴ': ['ぴゃ', 'ぴゅ', 'ぴょ'],
+  'み': ['みゃ', 'みゅ', 'みょ'],
+  'ゆ': ['ゆ'], 'よ': ['よ']
+};
+
 const yoonMapKatakana: { [key: string]: string } = {
   'シャ': 'ヤ', 'シュ': 'ユ', 'ショ': 'ヨ',
   'ジャ': 'ヤ', 'ジュ': 'ユ', 'ジョ': 'ヨ',
@@ -39,12 +57,95 @@ const yoonMapKatakana: { [key: string]: string } = {
   'ャ': 'ヤ', 'ュ': 'ユ', 'ョ': 'ヨ',
 };
 
+const yoonInitialsKatakana: { [key: string]: string[] } = {
+  'リ': ['リャ', 'リュ', 'リョ'],
+  'シ': ['シャ', 'シュ', 'ショ'],
+  'チ': ['チャ', 'チュ', 'チョ'],
+  'キ': ['キャ', 'キュ', 'キョ'],
+  'ギ': ['ギャ', 'ギュ', 'ギョ'],
+  'ジ': ['ジャ', 'ジュ', 'ジョ'],
+  'ニ': ['ニャ', 'ニュ', 'ニョ'],
+  'ヒ': ['ヒャ', 'ヒュ', 'ヒョ'],
+  'ビ': ['ビャ', 'ビュ', 'ビョ'],
+  'ピ': ['ピャ', 'ピュ', 'ピョ'],
+  'ミ': ['ミャ', 'ミュ', 'ミョ']
+};
+
 type ShiritoriData = {
   shiritoriWords: { [key: string]: string[] };
   wordsEndingWithN: { [key: string]: string[] };
 };
 
 type PlayerType = 'parent' | 'child';
+
+type HistoryItem = {
+  word: string;
+  isWrong?: boolean;
+};
+
+const ChoiceButton = ({ word, onPress, disabled }: { word: string; onPress: () => void; disabled?: boolean }) => {
+  const [isPressed, setIsPressed] = useState(false);
+
+  return (
+    <TouchableOpacity
+      style={[
+        styles.choiceButton,
+        isPressed && styles.choiceButtonPressed,
+        disabled && styles.choiceButtonDisabled
+      ]}
+      onPress={onPress}
+      onPressIn={() => setIsPressed(true)}
+      onPressOut={() => setIsPressed(false)}
+      disabled={disabled}
+    >
+      <Text style={styles.choiceButtonText}>{word}</Text>
+    </TouchableOpacity>
+  );
+};
+
+// 履歴表示用のコンポーネント
+const HistoryDisplay = ({ history, wrongWord }: { history: HistoryItem[]; wrongWord: string }) => {
+  const renderHistoryRow = (items: HistoryItem[], startIndex: number) => {
+    const isFirstRow = startIndex === 0;
+    const showWrongWord = wrongWord && (
+      (isFirstRow && history.length <= 7) || (!isFirstRow && history.length > 7)
+    );
+
+    return (
+      <View style={styles.historyRow}>
+        {!isFirstRow && items.length > 0 && <Text style={styles.historyItem}> → </Text>}
+        {items.map((item, index) => (
+          <React.Fragment key={startIndex + index}>
+            <Text
+              style={[
+                styles.historyItem,
+                item.isWrong && styles.wrongWord,
+              ]}
+            >
+              {item.word}
+            </Text>
+            {index < items.length - 1 && (
+              <Text style={styles.historyItem}> → </Text>
+            )}
+          </React.Fragment>
+        ))}
+        {showWrongWord && (
+          <>
+            {items.length > 0 && <Text style={styles.historyItem}> → </Text>}
+            <Text style={[styles.historyItem, styles.wrongWord]}>{wrongWord}</Text>
+          </>
+        )}
+      </View>
+    );
+  };
+
+  return (
+    <View style={styles.historyContainer}>
+      {renderHistoryRow(history.slice(0, 7), 0)}
+      {renderHistoryRow(history.slice(7), 7)}
+    </View>
+  );
+};
 
 export default function ShiritoriGame() {
   const router = useRouter();
@@ -53,7 +154,7 @@ export default function ShiritoriGame() {
   const [choices, setChoices] = useState<string[]>([]);
   const [currentPlayer, setCurrentPlayer] = useState<PlayerType>('parent');
   const [turn, setTurn] = useState(1);
-  const [history, setHistory] = useState<string[]>([]);
+  const [history, setHistory] = useState<HistoryItem[]>([]);
   const [isGameOver, setIsGameOver] = useState(false);
   const [isResult, setIsResult] = useState(false);
   const [startTime, setStartTime] = useState<number | null>(null);
@@ -63,9 +164,12 @@ export default function ShiritoriGame() {
   const [wrongWord, setWrongWord] = useState('');
   const bounceAnim = useRef(new Animated.Value(0)).current;
   const textBounceAnim = useRef(new Animated.Value(0)).current;
+  const [isSettingsVisible, setIsSettingsVisible] = useState(false);
+  const [sound, setSound] = useState<Audio.Sound | null>(null);
 
   const shiritoriData = isHiragana ? hiraganaData as ShiritoriData : katakanaData as ShiritoriData;
   const yoonMap = isHiragana ? yoonMapHiragana : yoonMapKatakana;
+  const yoonInitials = isHiragana ? yoonInitialsHiragana : yoonInitialsKatakana;
 
   useEffect(() => {
     initializeGame();
@@ -113,13 +217,21 @@ export default function ShiritoriGame() {
     }
   }, [isResult]);
 
+  useEffect(() => {
+    return sound
+      ? () => {
+          sound.unloadAsync();
+        }
+      : undefined;
+  }, [sound]);
+
   const initializeGame = () => {
     const initialWord = getRandomWord();
     setCurrentWord(initialWord);
     generateChoices(initialWord);
     setStartTime(Date.now());
     setElapsed(0);
-    setHistory([initialWord]);
+    setHistory([{ word: initialWord }]);
     setTurn(1);
     setCurrentPlayer('parent');
     setIsGameOver(false);
@@ -146,14 +258,22 @@ export default function ShiritoriGame() {
     const shiritoriWords = shiritoriData.shiritoriWords;
     const wordsEndingWithN = shiritoriData.wordsEndingWithN;
 
-    const goWords = (shiritoriWords[normalizedLastChar] || []).slice();
+    // 現在のモード（ひらがな/カタカナ）に基づいて単語をフィルタリング
+    const filterByMode = (words: string[]) => {
+      return words.filter(w => {
+        const isHiraganaChar = /^[\u3040-\u309F]+$/.test(w);
+        return isHiragana ? isHiraganaChar : !isHiraganaChar;
+      });
+    };
+
+    const goWords = filterByMode(shiritoriWords[normalizedLastChar] || []);
     const goChoices = shuffle(goWords).slice(0, 2);
 
-    const goNWords = (shiritoriWords[normalizedLastChar] || [])
-      .filter(w => w.endsWith(isHiragana ? 'ん' : 'ン'));
+    const goNWords = filterByMode((shiritoriWords[normalizedLastChar] || [])
+      .filter(w => w.endsWith(isHiragana ? 'ん' : 'ン')));
     const goNChoice = shuffle(goNWords).slice(0, 1);
 
-    let allWords = Object.values(shiritoriWords).flat();
+    let allWords = filterByMode(Object.values(shiritoriWords).flat());
     const exclude = new Set([...goChoices, ...goNChoice]);
     allWords = allWords.filter(w => !exclude.has(w));
     const randomChoices = shuffle(allWords).slice(0, 7);
@@ -171,6 +291,20 @@ export default function ShiritoriGame() {
     return arr;
   };
 
+  const playSound = async (type: 'correct' | 'gameOver') => {
+    try {
+      const { sound: newSound } = await Audio.Sound.createAsync(
+        type === 'correct'
+          ? require('../../assets/sounds/OK.mp3')
+          : require('../../assets/sounds/Finish.mp3')
+      );
+      setSound(newSound);
+      await newSound.playAsync();
+    } catch (error) {
+      console.error('Error playing sound:', error);
+    }
+  };
+
   const handleChoice = (choice: string) => {
     const endTime = Date.now();
     const timeTaken = (endTime - startTime!) / 1000;
@@ -180,15 +314,18 @@ export default function ShiritoriGame() {
     }));
     setElapsed(0);
 
-    if (history.includes(choice)) {
+    if (history.some(item => item.word === choice)) {
       setWrongWord(choice);
       setIsGameOver(true);
       setIsResult(true);
       setWinner((currentPlayer === 'parent' ? '🐶' : '🦁') + 'の勝ち！（同じ単語を繰り返した）');
+      playSound('gameOver');
       return;
     }
 
-    const prevWord = history[history.length - 1];
+    const prevWord = history[history.length - 1].word;
+    
+    // 前の単語の最後の文字を取得（拗音の場合は2文字）
     let prevLastChar = prevWord.slice(-1);
     if (prevWord.length >= 2) {
       const lastTwoChars = prevWord.slice(-2);
@@ -197,27 +334,38 @@ export default function ShiritoriGame() {
       }
     }
 
+    // 選択単語の最初の文字を取得（拗音の場合は2文字）
     let choiceFirstChar = choice.slice(0, 1);
     if (choice.length >= 2) {
       const firstTwoChars = choice.slice(0, 2);
       if (yoonMap[firstTwoChars]) {
         choiceFirstChar = firstTwoChars;
-      } else if (choice.length >= 3) {
-        const firstThreeChars = choice.slice(0, 3);
-        if (yoonMap[firstThreeChars]) {
-          choiceFirstChar = firstThreeChars;
-        }
       }
     }
 
+    // 前の単語の最後の文字が拗音の場合、対応する文字に変換
     const prevLastCharNormalized = yoonMap[prevLastChar] || prevLastChar;
+    // 選択単語の最初の文字が拗音の場合、対応する文字に変換
     const choiceFirstCharNormalized = yoonMap[choiceFirstChar] || choiceFirstChar;
 
-    if (choiceFirstCharNormalized !== prevLastCharNormalized) {
+    // 拗音許容ロジック
+    let isValid = false;
+    if (choiceFirstCharNormalized === prevLastCharNormalized) {
+      isValid = true;
+    } else if (
+      yoonInitials[prevLastCharNormalized] &&
+      yoonInitials[prevLastCharNormalized].includes(choiceFirstChar)
+    ) {
+      // 例: 「り」→「りゃ」「りゅ」「りょ」
+      isValid = true;
+    }
+
+    if (!isValid) {
       setWrongWord(choice);
       setIsGameOver(true);
       setIsResult(true);
       setWinner((currentPlayer === 'parent' ? '🐶' : '🦁') + 'の勝ち！（相手が正しい単語を選ばなかった）');
+      playSound('gameOver');
       return;
     }
 
@@ -228,10 +376,12 @@ export default function ShiritoriGame() {
       setIsGameOver(true);
       setIsResult(true);
       setWinner((currentPlayer === 'parent' ? '🐶' : '🦁') + `の勝ち！（相手が「${endChar}」で終わる単語を選んだ）`);
+      playSound('gameOver');
       return;
     }
 
-    setHistory([...history, choice]);
+    playSound('correct');
+    setHistory([...history, { word: choice }]);
     setCurrentWord(choice);
     generateChoices(choice);
 
@@ -261,6 +411,7 @@ export default function ShiritoriGame() {
     }
     setWinner(winnerText);
     setIsResult(true);
+    playSound('gameOver');
   };
 
   const handleRetry = () => {
@@ -272,26 +423,32 @@ export default function ShiritoriGame() {
     handleRetry();
   };
 
+  const handleSwitchKana = () => {
+    setIsHiragana(!isHiragana);
+    handleRetry();
+  };
+
   if (isResult) {
     const parentTotal = times.parent.reduce((a, b) => a + b, 0);
     const childTotal = times.child.reduce((a, b) => a + b, 0);
     return (
-      <GameLayout onRetry={handleRetry} onSwitchGame={handleSwitchGame}>
+      <GameLayout>
         <View style={styles.container}>
-          <View style={styles.historyContainer}>
-            {history.map((word, idx) => (
-              <Text key={idx} style={styles.historyItem}>
-                {word}
-                {idx < history.length - 1 && ' → '}
-              </Text>
-            ))}
-            {wrongWord && (
-              <>
-                <Text style={styles.historyItem}> → </Text>
-                <Text style={[styles.historyItem, styles.wrongWord]}>{wrongWord}</Text>
-              </>
-            )}
-          </View>
+          <TouchableOpacity
+            style={styles.settingsButton}
+            onPress={() => setIsSettingsVisible(true)}
+          >
+            <Ionicons name="ellipsis-horizontal" size={24} color="#333" />
+          </TouchableOpacity>
+          <GameMenu
+            visible={isSettingsVisible}
+            onClose={() => setIsSettingsVisible(false)}
+            onRetry={handleRetry}
+            onSwitchGame={handleSwitchGame}
+            onSwitchKana={handleSwitchKana}
+            isHiragana={isHiragana}
+          />
+          <HistoryDisplay history={history} wrongWord={wrongWord} />
           <View style={styles.resultsContainer}>
             <Animated.Text
               style={[
@@ -344,16 +501,23 @@ export default function ShiritoriGame() {
   }
 
   return (
-    <GameLayout onRetry={handleRetry} onSwitchGame={handleSwitchGame}>
+    <GameLayout>
       <View style={styles.container}>
-        <View style={styles.historyContainer}>
-          {history.map((word, idx) => (
-            <Text key={idx} style={styles.historyItem}>
-              {word}
-              {idx < history.length - 1 && ' → '}
-            </Text>
-          ))}
-        </View>
+        <TouchableOpacity
+          style={styles.settingsButton}
+          onPress={() => setIsSettingsVisible(true)}
+        >
+          <Ionicons name="ellipsis-horizontal" size={24} color="#333" />
+        </TouchableOpacity>
+        <GameMenu
+          visible={isSettingsVisible}
+          onClose={() => setIsSettingsVisible(false)}
+          onRetry={handleRetry}
+          onSwitchGame={handleSwitchGame}
+          onSwitchKana={handleSwitchKana}
+          isHiragana={isHiragana}
+        />
+        <HistoryDisplay history={history} wrongWord={wrongWord} />
         <View style={styles.playersArea}>
           <View style={[styles.playerArea, currentPlayer === 'parent' && styles.activePlayer]}>
             <View style={styles.playerTitle}>
@@ -366,14 +530,13 @@ export default function ShiritoriGame() {
             </View>
             {currentPlayer === 'parent' && (
               <View style={styles.choicesArea}>
-                {choices.map((choice, idx) => (
-                  <TouchableOpacity
-                    key={idx}
-                    style={styles.choiceButton}
+                {choices.map((choice, index) => (
+                  <ChoiceButton
+                    key={index}
+                    word={choice}
                     onPress={() => handleChoice(choice)}
-                  >
-                    <Text style={styles.choiceText}>{choice}</Text>
-                  </TouchableOpacity>
+                    disabled={isGameOver}
+                  />
                 ))}
               </View>
             )}
@@ -390,14 +553,13 @@ export default function ShiritoriGame() {
             </View>
             {currentPlayer === 'child' && (
               <View style={styles.choicesArea}>
-                {choices.map((choice, idx) => (
-                  <TouchableOpacity
-                    key={idx}
-                    style={styles.choiceButton}
+                {choices.map((choice, index) => (
+                  <ChoiceButton
+                    key={index}
+                    word={choice}
                     onPress={() => handleChoice(choice)}
-                  >
-                    <Text style={styles.choiceText}>{choice}</Text>
-                  </TouchableOpacity>
+                    disabled={isGameOver}
+                  />
                 ))}
               </View>
             )}

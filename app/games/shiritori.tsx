@@ -173,7 +173,7 @@ export default function ShiritoriGame() {
 
   useEffect(() => {
     initializeGame();
-  }, []);
+  }, [isHiragana]);
 
   useEffect(() => {
     if (isGameOver || !startTime) return;
@@ -261,18 +261,21 @@ export default function ShiritoriGame() {
     // 現在のモード（ひらがな/カタカナ）に基づいて単語をフィルタリング
     const filterByMode = (words: string[]) => {
       return words.filter(w => {
-        const isHiraganaChar = /^[\u3040-\u309F]+$/.test(w);
+        const firstChar = w.charAt(0);
+        const isHiraganaChar = /^[\u3040-\u309F]$/.test(firstChar);
         return isHiragana ? isHiraganaChar : !isHiraganaChar;
       });
     };
 
+    // 通常のしりとり単語を取得
     const goWords = filterByMode(shiritoriWords[normalizedLastChar] || []);
     const goChoices = shuffle(goWords).slice(0, 2);
 
-    const goNWords = filterByMode((shiritoriWords[normalizedLastChar] || [])
-      .filter(w => w.endsWith(isHiragana ? 'ん' : 'ン')));
+    // 「ん」で終わる単語を取得
+    const goNWords = filterByMode(wordsEndingWithN[normalizedLastChar] || []);
     const goNChoice = shuffle(goNWords).slice(0, 1);
 
+    // ランダムな選択肢を生成
     let allWords = filterByMode(Object.values(shiritoriWords).flat());
     const exclude = new Set([...goChoices, ...goNChoice]);
     allWords = allWords.filter(w => !exclude.has(w));
@@ -419,7 +422,7 @@ export default function ShiritoriGame() {
   };
 
   const handleSwitchGame = () => {
-    setIsHiragana(!isHiragana);
+    // 将来的に他のゲームへの切り替えを実装
     handleRetry();
   };
 

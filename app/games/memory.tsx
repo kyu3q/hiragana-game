@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Audio } from 'expo-av';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
-import { Animated, Dimensions, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Animated, Dimensions, Image, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import GameLayout from '../../components/common/GameLayout';
 import GameMenu from '../../components/common/GameMenu';
 
@@ -15,6 +15,30 @@ const isSmallScreen = Math.min(width, height) < 768; // 768ptを基準に
 const OK_SOUND = require('../../assets/sounds/OK_Memory.mp3');
 const NG_SOUND = require('../../assets/sounds/NG_Memory.mp3');
 const FINISH_SOUND = require('../../assets/sounds/Finish.mp3');
+
+// アンパンマンの画像をインポート
+const anpanmanImages: { [key: string]: any } = {
+  '1': require('../../assets/images/anpanman1.png'),
+  '2': require('../../assets/images/anpanman2.png'),
+  '3': require('../../assets/images/anpanman3.png'),
+  '4': require('../../assets/images/anpanman4.png'),
+  '5': require('../../assets/images/anpanman5.png'),
+  '6': require('../../assets/images/anpanman6.png'),
+  '7': require('../../assets/images/anpanman7.png'),
+  '8': require('../../assets/images/anpanman8.png'),
+  '9': require('../../assets/images/anpanman9.png'),
+  '10': require('../../assets/images/anpanman10.png'),
+  '11': require('../../assets/images/anpanman11.png'),
+  '12': require('../../assets/images/anpanman12.png'),
+  '13': require('../../assets/images/anpanman13.png'),
+  '14': require('../../assets/images/anpanman14.png'),
+  '15': require('../../assets/images/anpanman15.png'),
+  '16': require('../../assets/images/anpanman16.png'),
+  '17': require('../../assets/images/anpanman17.png'),
+  '18': require('../../assets/images/anpanman18.png'),
+  '19': require('../../assets/images/anpanman19.png'),
+  '20': require('../../assets/images/anpanman20.png'),
+};
 
 // ひらがな文字データの定義
 const hiraganaMainTable = [
@@ -65,7 +89,7 @@ const katakanaYouonTable = [
 type Card = {
   id: number;
   value: string;
-  type: 'hiragana' | 'katakana';
+  type: 'hiragana' | 'katakana' | 'anpanman';
   isFlipped: boolean;
   isMatched: boolean;
 };
@@ -77,7 +101,7 @@ const MemoryGame = () => {
   const [flippedCards, setFlippedCards] = useState<Card[]>([]);
   const [matchedPairs, setMatchedPairs] = useState<number[]>([]);
   const [isChecking, setIsChecking] = useState(false);
-  const [selectedType, setSelectedType] = useState<'main' | 'dakuon' | 'youon'>('main');
+  const [selectedType, setSelectedType] = useState<'main' | 'dakuon' | 'youon' | 'anpanman'>('main');
   const [isBattleMode, setIsBattleMode] = useState(true);
   const [currentPlayer, setCurrentPlayer] = useState<PlayerType>('lion');
   const [playerPairs, setPlayerPairs] = useState({ lion: 0, dog: 0 });
@@ -105,6 +129,10 @@ const MemoryGame = () => {
 
   // 文字の種類に応じて文字を取得
   const getCharacters = (type: 'hiragana' | 'katakana') => {
+    if (selectedType === 'anpanman') {
+      return Object.keys(anpanmanImages);
+    }
+
     let characters: string[] = [];
     const table = type === 'hiragana' ? 
       { main: hiraganaMainTable, dakuon: hiraganaDakuonTable, youon: hiraganaYouonTable } :
@@ -134,21 +162,23 @@ const MemoryGame = () => {
 
   // カードペアを作成
   const createCardPairs = () => {
-    const allCharacters = getCharacters(isHiragana ? 'hiragana' : 'katakana');
+    const allCharacters = selectedType === 'anpanman' ? 
+      Object.keys(anpanmanImages) : 
+      getCharacters(isHiragana ? 'hiragana' : 'katakana');
     const selectedCharacters = getRandomCharacters(allCharacters);
     
     const pairs = selectedCharacters.map((char, index) => [
       {
         id: index * 2,
         value: char,
-        type: isHiragana ? 'hiragana' as const : 'katakana' as const,
+        type: selectedType === 'anpanman' ? 'anpanman' as const : (isHiragana ? 'hiragana' as const : 'katakana' as const),
         isFlipped: false,
         isMatched: false
       },
       {
         id: index * 2 + 1,
         value: char,
-        type: isHiragana ? 'hiragana' as const : 'katakana' as const,
+        type: selectedType === 'anpanman' ? 'anpanman' as const : (isHiragana ? 'hiragana' as const : 'katakana' as const),
         isFlipped: false,
         isMatched: false
       }
@@ -468,7 +498,7 @@ const MemoryGame = () => {
     const cardFrontStyle = [
       styles.cardFront,
       frontAnimatedStyle,
-      !card.isMatched && !card.isFlipped && (isBattleMode ? (currentPlayer === 'lion' ? styles.lionTurn : styles.dogTurn) : styles.singlePlayerTurn)
+      isBattleMode ? (currentPlayer === 'lion' ? styles.lionTurn : styles.dogTurn) : styles.singlePlayerTurn
     ];
 
     const cardBackStyle = [
@@ -498,7 +528,15 @@ const MemoryGame = () => {
             <Text style={styles.cardFrontText}>?</Text>
           </Animated.View>
           <Animated.View style={[cardBackStyle, matchedStyle]}>
-            <Text style={styles.cardText}>{card.value}</Text>
+            {card.type === 'anpanman' ? (
+              <Image
+                source={anpanmanImages[card.value]}
+                style={styles.cardImage}
+                resizeMode="contain"
+              />
+            ) : (
+              <Text style={styles.cardText}>{card.value}</Text>
+            )}
           </Animated.View>
         </View>
       </TouchableOpacity>
@@ -557,7 +595,7 @@ const MemoryGame = () => {
                 winner === 'lion' ? styles.lionColor : winner === 'dog' ? styles.dogColor : styles.drawColor,
                 textBounceStyle
               ]}>
-                🎉{winner === 'draw' ? '引き分け！' : winner === 'lion' ? '🦁' : '🐶'}の勝ち！
+                🎉{winner === 'draw' ? '引き分け！' : `${winner === 'lion' ? '🦁' : '🐶'}の勝ち！`}
               </Animated.Text>
               <View style={styles.resultScores}>
                 <View style={styles.resultScoreRow}>
@@ -623,6 +661,14 @@ const MemoryGame = () => {
               >
                 <Text style={[styles.typeButtonText, selectedType === 'youon' && styles.typeButtonTextActive]}>
                   拗音
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.typeButton, selectedType === 'anpanman' && styles.typeButtonActive]}
+                onPress={() => setSelectedType('anpanman')}
+              >
+                <Text style={[styles.typeButtonText, selectedType === 'anpanman' && styles.typeButtonTextActive]}>
+                  アンパンマン
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
@@ -698,10 +744,10 @@ const styles = StyleSheet.create({
   },
   typeSelector: {
     flexDirection: 'row',
-    gap: isSmallScreen ? 4 : 8,  // iPhone用にギャップを縮小
+    gap: isSmallScreen ? 4 : 8,
   },
   typeButton: {
-    paddingVertical: isSmallScreen ? 8 : 10,  // iPhone用にパディングを縮小
+    paddingVertical: isSmallScreen ? 8 : 10,
     paddingHorizontal: isSmallScreen ? 10 : 12,
     borderRadius: 8,
     borderWidth: 2,
@@ -713,7 +759,7 @@ const styles = StyleSheet.create({
   },
   typeButtonText: {
     fontFamily: Platform.OS === 'ios' ? 'Hiragino Sans' : 'sans-serif',
-    fontSize: isSmallScreen ? 12 : 16,  // iPhone用にフォントサイズを縮小
+    fontSize: isSmallScreen ? 12 : 16,
     color: '#e74c3c',
     fontWeight: '500',
   },
@@ -732,7 +778,7 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   battleButton: {
-    paddingVertical: isSmallScreen ? 8 : 10,  // iPhone用にパディングを縮小
+    paddingVertical: isSmallScreen ? 8 : 10,
     paddingHorizontal: isSmallScreen ? 10 : 12,
     borderRadius: 8,
     borderWidth: 2,
@@ -744,7 +790,7 @@ const styles = StyleSheet.create({
   },
   battleButtonText: {
     fontFamily: Platform.OS === 'ios' ? 'Hiragino Sans' : 'sans-serif',
-    fontSize: isSmallScreen ? 12 : 16,  // iPhone用にフォントサイズを縮小
+    fontSize: isSmallScreen ? 12 : 16,
     color: '#a83ce7',
     fontWeight: '500',
   },
@@ -758,14 +804,14 @@ const styles = StyleSheet.create({
     width: '100%',
     paddingHorizontal: isSmallScreen ? 0 : 20,
     maxWidth: width,
-    gap: isSmallScreen ? 6 : 12,  // iPhone用の隙間を2pxから4pxに広げる
+    gap: isSmallScreen ? 6 : 12,
   },
   card: {
     width: isSmallScreen 
-      ? (width - 180) / 6  // iPhone用
+      ? (width - 180) / 6  
       : (width - 160) / 6,  // iPad用（実際の画面幅から余白を引く）
     aspectRatio: isSmallScreen 
-      ? 2.5  // iPhone用（縦幅を調整）
+      ? 2.5 
       : 1.8,  // iPad用（縦幅を調整：1.8は横:縦 = 9:5の比率）
     margin: 0,
   },
@@ -800,18 +846,18 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 1,
+    borderWidth: 3,
     borderColor: '#3498db',
     backfaceVisibility: 'hidden',
   },
   cardText: {
     fontFamily: Platform.OS === 'ios' ? 'Hiragino Sans' : 'sans-serif',
-    fontSize: isSmallScreen ? 24 : 32,
+    fontSize: isSmallScreen ? 24 : 48,
     fontWeight: '500',
   },
   cardFrontText: {
     fontFamily: Platform.OS === 'ios' ? 'Hiragino Sans' : 'sans-serif',
-    fontSize: isSmallScreen ? 24 : 32,
+    fontSize: isSmallScreen ? 24 : 48,
     fontWeight: '500',
     color: 'white',
   },
@@ -838,11 +884,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   playerEmoji: {
-    fontSize: 24,
+    fontSize: isSmallScreen ? 24 : 36,
     marginBottom: 4,
   },
   currentPlayer: {
-    fontSize: 32,
+    fontSize: isSmallScreen ? 32 : 64,
     transform: [{ scale: 1.1 }],
   },
   playerScore: {
@@ -923,6 +969,10 @@ const styles = StyleSheet.create({
   singlePlayerMatched: {
     borderColor: '#5eb5fc',
   },
+  cardImage: {
+    width: '100%',
+    height: '100%',
+  },
 });
 
-export default MemoryGame; 
+export default MemoryGame;

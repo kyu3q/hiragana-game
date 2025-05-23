@@ -3,8 +3,8 @@ import { Audio } from 'expo-av';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import { Animated, Dimensions, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import GameLayout from '../../components/common/GameLayout';
-import GameMenu from '../../components/common/GameMenu';
+import GameLayout from '../components/GameLayout';
+import GameMenu from '../components/GameMenu';
 import { shiritoriData as hiraganaData } from '../constants/shiritoriHiragana';
 import { shiritoriData as katakanaData } from '../constants/shiritoriKatakana';
 
@@ -422,10 +422,6 @@ const ShiritoriGame = () => {
     initializeGame();
   };
 
-  const handleSwitchGame = () => {
-    router.push('/games/memory');
-  };
-
   const handleSwitchKana = () => {
     setIsHiragana(!isHiragana);
     handleRetry();
@@ -447,9 +443,9 @@ const ShiritoriGame = () => {
             visible={isSettingsVisible}
             onClose={() => setIsSettingsVisible(false)}
             onRetry={handleRetry}
-            onSwitchGame={handleSwitchGame}
             onSwitchKana={handleSwitchKana}
             isHiragana={isHiragana}
+            currentGame="shiritori"
           />
           <HistoryDisplay history={history} wrongWord={wrongWord} />
           <View style={styles.resultsContainer}>
@@ -516,9 +512,9 @@ const ShiritoriGame = () => {
           visible={isSettingsVisible}
           onClose={() => setIsSettingsVisible(false)}
           onRetry={handleRetry}
-          onSwitchGame={handleSwitchGame}
           onSwitchKana={handleSwitchKana}
           isHiragana={isHiragana}
+          currentGame="shiritori"
         />
         <HistoryDisplay history={history} wrongWord={wrongWord} />
         <View style={styles.playersArea}>
@@ -701,8 +697,8 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
   },
   activePlayer: {
-    borderWidth: 2,
-    borderColor: '#4caf50',
+    borderWidth: 4,
+    borderColor: '#fbbc5d',
   },
   playerTitle: {
     flexDirection: 'row',

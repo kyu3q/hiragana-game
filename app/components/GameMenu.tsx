@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import React, { useEffect, useRef } from 'react';
 import { Animated, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
@@ -6,19 +7,27 @@ type GameMenuProps = {
   visible: boolean;
   onClose: () => void;
   onRetry: () => void;
-  onSwitchGame: () => void;
   onSwitchKana: () => void;
   isHiragana: boolean;
+  currentGame: string;
 };
+
+// ゲーム一覧
+const GAMES = [
+  { id: 'shiritori', name: '親子しりとり' },
+  { id: 'memory', name: 'めもりー対決！' },
+  { id: 'bugbattle', name: '昆虫バトル' },
+] as const;
 
 export default function GameMenu({
   visible,
   onClose,
   onRetry,
-  onSwitchGame,
   onSwitchKana,
   isHiragana,
+  currentGame,
 }: GameMenuProps) {
+  const router = useRouter();
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -36,6 +45,16 @@ export default function GameMenu({
       }).start();
     }
   }, [visible]);
+
+  // ゲーム切替処理
+  const handleSwitchGame = () => {
+    // 現在のゲーム以外のゲームを取得
+    const availableGames = GAMES.filter(game => game.id !== currentGame);
+    // ランダムに1つ選択
+    const nextGame = availableGames[Math.floor(Math.random() * availableGames.length)];
+    // 選択したゲームに遷移
+    router.push(`/games/${nextGame.id}`);
+  };
 
   if (!visible) return null;
 
@@ -69,7 +88,7 @@ export default function GameMenu({
           <TouchableOpacity
             style={styles.menuItem}
             onPress={() => {
-              onSwitchGame();
+              handleSwitchGame();
               onClose();
             }}
           >

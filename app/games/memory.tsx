@@ -3,8 +3,8 @@ import { Audio } from 'expo-av';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import { Animated, Dimensions, Image, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import GameLayout from '../../components/common/GameLayout';
-import GameMenu from '../../components/common/GameMenu';
+import GameLayout from '../components/GameLayout';
+import GameMenu from '../components/GameMenu';
 
 const { width, height } = Dimensions.get('window');
 
@@ -398,10 +398,6 @@ const MemoryGame = () => {
     handleRetry();
   };
 
-  const handleSwitchGame = () => {
-    router.push('/games/shiritori');
-  };
-
   useEffect(() => {
     if (showResult) {
       Animated.loop(
@@ -579,9 +575,9 @@ const MemoryGame = () => {
             visible={isSettingsVisible}
             onClose={() => setIsSettingsVisible(false)}
             onRetry={handleRetry}
-            onSwitchGame={handleSwitchGame}
             onSwitchKana={handleSwitchKana}
             isHiragana={isHiragana}
+            currentGame="memory"
           />
           <View style={styles.resultArea}>
             <View style={styles.resultContent}>
@@ -631,9 +627,9 @@ const MemoryGame = () => {
           visible={isSettingsVisible}
           onClose={() => setIsSettingsVisible(false)}
           onRetry={handleRetry}
-          onSwitchGame={handleSwitchGame}
           onSwitchKana={handleSwitchKana}
           isHiragana={isHiragana}
+          currentGame="memory"
         />
         <View style={styles.header}>
           <View style={styles.headerContent}>

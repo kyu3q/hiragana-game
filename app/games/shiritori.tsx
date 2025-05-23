@@ -5,8 +5,8 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Animated, Dimensions, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import GameLayout from '../../components/common/GameLayout';
 import GameMenu from '../../components/common/GameMenu';
-import { shiritoriData as hiraganaData } from '../../constants/games/shiritoriHiragana';
-import { shiritoriData as katakanaData } from '../../constants/games/shiritoriKatakana';
+import { shiritoriData as hiraganaData } from '../constants/shiritoriHiragana';
+import { shiritoriData as katakanaData } from '../constants/shiritoriKatakana';
 
 const { width, height } = Dimensions.get('window');
 // iPadの画面サイズを考慮して、画面の向きに関係なく判定

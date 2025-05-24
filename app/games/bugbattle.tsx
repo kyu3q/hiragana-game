@@ -79,6 +79,7 @@ interface Question {
 interface Frame {
   id: number;
   question: Question | null;
+  availableLetters: string[];
 }
 
 // 難易度設定
@@ -122,6 +123,27 @@ const SUNSET_WORDS = [
   { word: '夕空', answer: 'ゆうぞら', letters: ['ゆ', 'う', 'ぞ', 'ら'] },
   { word: '夕風', answer: 'ゆうかぜ', letters: ['ゆ', 'う', 'か', 'ぜ'] },
 ];
+
+// 1枠分の新しい問題を生成する関数
+const generateSingleQuestion = (usedIndices: number[], currentWordList: any[]): { question: Question; availableLetters: string[]; usedIndex: number } => {
+  let randomIndex;
+  do {
+    randomIndex = Math.floor(Math.random() * currentWordList.length);
+  } while (usedIndices.includes(randomIndex));
+  const question = currentWordList[randomIndex];
+  const slots = Array.from({ length: question.answer.length }, (_, i) => ({
+    id: i,
+    letter: null,
+  }));
+  return {
+    question: {
+      ...question,
+      slots,
+    },
+    availableLetters: [...question.letters].sort(() => Math.random() - 0.5),
+    usedIndex: randomIndex,
+  };
+};
 
 export default function BugBattle() {
   const router = useRouter();
@@ -173,9 +195,9 @@ export default function BugBattle() {
     message: '',
   });
   const [frames, setFrames] = useState<Frame[]>([
-    { id: 1, question: null },
-    { id: 2, question: null },
-    { id: 3, question: null },
+    { id: 1, question: null, availableLetters: [] },
+    { id: 2, question: null, availableLetters: [] },
+    { id: 3, question: null, availableLetters: [] },
   ]);
 
   // 連番ID生成用ref
@@ -359,29 +381,18 @@ export default function BugBattle() {
       5: level5Words,
     };
     const currentWordList = wordLists[1];
-
-    setFrames(prevFrames => {
-      const newFrames = prevFrames.map(frame => {
-        const randomIndex = Math.floor(Math.random() * currentWordList.length);
-        const question = currentWordList[randomIndex];
-        const slots = Array.from({ length: question.answer.length }, (_, i) => ({
-          id: i,
-          letter: null,
-        }));
-        return {
-          ...frame,
-          question: {
-            ...question,
-            slots,
-          },
-        };
-      });
-      // ここでavailableLettersもセット
-      if (newFrames[0]?.question) {
-        setAvailableLetters([...newFrames[0].question.letters].sort(() => Math.random() - 0.5));
-      }
-      return newFrames;
+    // 3つの異なる単語を選ぶ
+    const usedIndices: number[] = [];
+    const newFrames = frames.map((frame) => {
+      const { question, availableLetters, usedIndex } = generateSingleQuestion(usedIndices, currentWordList);
+      usedIndices.push(usedIndex);
+      return {
+        ...frame,
+        question,
+        availableLetters,
+      };
     });
+    setFrames(newFrames);
   };
 
   // ゲームループの開始
@@ -688,11 +699,24 @@ export default function BugBattle() {
   };
 
   // 答えの確認
-  const checkAnswer = (slots: { id: number; letter: string | null }[]) => {
-    if (!frames[0]?.question) return;
+  const checkAnswer = (frameIndex: number, slots: { id: number; letter: string | null }[]) => {
+    if (!frames[frameIndex]?.question) return;
+    const wordLists = {
+      1: level1Words,
+      2: level2Words,
+      3: level3Words,
+      4: level4Words,
+      5: level5Words,
+    };
+    const currentWordList = wordLists[1];
+    // 既に使われている単語のインデックスを取得
+    const usedIndices = frames.map(f => {
+      if (!f.question) return -1;
+      return currentWordList.findIndex(w => w.answer === f.question!.answer);
+    }).filter(idx => idx !== -1 && idx !== undefined && idx !== null && idx !== frameIndex);
 
     const answer = slots.map(slot => slot.letter).join('');
-    if (answer === frames[0].question.answer) {
+    if (answer === frames[frameIndex].question.answer) {
       // 正解の場合
       const baseScore = 10;
       const finalScore = calculateScore(baseScore);
@@ -711,21 +735,25 @@ export default function BugBattle() {
         return newCombo;
       });
       // 必ず味方を出現させる
-      console.log('正解！味方を出現させます');
       setTimeout(() => {
         spawnBug();
       }, 100);
       checkLevelUp();
-      generateQuestion();
+      // 該当枠のみ新しい問題に差し替え
+      const { question, availableLetters, usedIndex } = generateSingleQuestion(usedIndices, currentWordList);
+      setFrames(prevFrames => prevFrames.map((frame, idx) =>
+        idx === frameIndex
+          ? { ...frame, question, availableLetters }
+          : frame
+      ));
     } else {
       // 不正解の場合
       setConsecutiveCorrect(0);
       // カードを元に戻す
       const letters = slots.map(slot => slot.letter).filter((letter): letter is string => letter !== null);
-      setAvailableLetters(prev => [...prev, ...letters]);
-      setFrames(prevFrames => 
-        prevFrames.map((frame, index) => 
-          index === 0
+      setFrames(prevFrames =>
+        prevFrames.map((frame, idx) =>
+          idx === frameIndex
             ? {
                 ...frame,
                 question: frame.question
@@ -734,6 +762,7 @@ export default function BugBattle() {
                       slots: frame.question.slots.map(slot => ({ ...slot, letter: null })),
                     }
                   : null,
+                availableLetters: [...frame.availableLetters, ...letters],
               }
             : frame
         )
@@ -782,37 +811,36 @@ export default function BugBattle() {
   };
 
   // 文字カードのクリック処理
-  const handleLetterPress = (letter: string) => {
-    if (!frames[0]?.question) return;
+  const handleLetterPress = (frameIndex: number, letter: string) => {
+    if (!frames[frameIndex]?.question) return;
     // 空いているスロットを探す
-    const emptySlotIndex = frames[0].question.slots.findIndex(slot => slot.letter === null);
+    const emptySlotIndex = frames[frameIndex].question.slots.findIndex(slot => slot.letter === null);
     if (emptySlotIndex !== -1) {
       // 空いているスロットに文字を配置
-      setFrames(prevFrames => 
-        prevFrames.map((frame, index) => 
-          index === 0
+      setFrames(prevFrames =>
+        prevFrames.map((frame, idx) =>
+          idx === frameIndex
             ? {
                 ...frame,
                 question: frame.question
                   ? {
                       ...frame.question,
-                      slots: frame.question.slots.map((slot, i) => 
+                      slots: frame.question.slots.map((slot, i) =>
                         i === emptySlotIndex ? { ...slot, letter } : slot
                       ),
                     }
                   : null,
+                availableLetters: frame.availableLetters.filter(l => l !== letter),
               }
             : frame
         )
       );
-      // 使用した文字を利用可能な文字から削除
-      setAvailableLetters(prev => prev.filter(l => l !== letter));
       // すべてのスロットが埋まったら判定
-      const updatedSlots = frames[0].question.slots.map((slot, index) => 
+      const updatedSlots = frames[frameIndex].question.slots.map((slot, index) =>
         index === emptySlotIndex ? { ...slot, letter } : slot
       );
       if (updatedSlots.every(slot => slot.letter !== null)) {
-        checkAnswer(updatedSlots);
+        checkAnswer(frameIndex, updatedSlots);
       }
     }
   };
@@ -941,7 +969,7 @@ export default function BugBattle() {
         <View style={[styles.questionArea, { position: 'absolute', bottom: 0, left: 0, right: 0, height: 300 }]}>
           {/* 3つの枠 */}
           <View style={styles.framesContainer}>
-            {frames.map(frame => (
+            {frames.map((frame, frameIndex) => (
               <View
                 key={frame.id}
                 style={styles.frame}
@@ -964,6 +992,18 @@ export default function BugBattle() {
                           </View>
                         ))}
                       </View>
+                      {/* 利用可能な文字（各枠ごと）をスロットの下に移動 */}
+                      <View style={styles.availableLettersContainer}>
+                        {frame.availableLetters.map((letter, index) => (
+                          <TouchableOpacity
+                            key={`available-${index}`}
+                            style={styles.availableLetter}
+                            onPress={() => handleLetterPress(frameIndex, letter)}
+                          >
+                            <Text style={styles.availableLetterText}>{letter}</Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
                     </>
                   ) : (
                     <Text style={styles.frameText}>枠 {frame.id}</Text>
@@ -971,38 +1011,6 @@ export default function BugBattle() {
                 </View>
               </View>
             ))}
-          </View>
-          {/* 利用可能な文字 */}
-          <View style={styles.availableLettersContainer}>
-            {availableLetters.length > 0 ? (
-              availableLetters.map((letter, index) => (
-                <TouchableOpacity
-                  key={`available-${index}`}
-                  style={styles.availableLetter}
-                  onPress={() => handleLetterPress(letter)}
-                >
-                  <Text style={styles.availableLetterText}>{letter}</Text>
-                </TouchableOpacity>
-              ))
-            ) : (
-              // 文字がない場合は空の枠を表示
-              Array.from({ length: 5 }).map((_, index) => (
-                <View
-                  key={`empty-${index}`}
-                  style={[
-                    styles.availableLetter,
-                    {
-                      backgroundColor: 'rgba(74, 144, 226, 0.3)',
-                      borderWidth: 2,
-                      borderColor: '#4a90e2',
-                      borderStyle: 'dashed',
-                      minWidth: 35,
-                      minHeight: 35,
-                    }
-                  ]}
-                />
-              ))
-            )}
           </View>
         </View>
       </View>

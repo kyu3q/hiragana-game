@@ -47,5 +47,8 @@
     "eslint": "^9.25.0",
     "eslint-config-expo": "~9.2.0"
   },
-  "private": true
+  "private": true,
+  "engines": {
+    "node": ">=16.0.0"
+  }
 }

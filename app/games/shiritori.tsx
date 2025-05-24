@@ -3,10 +3,10 @@ import { Audio } from 'expo-av';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import { Animated, Dimensions, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { shiritoriData as hiraganaData } from '../../constants/games/shiritoriHiragana';
+import { shiritoriData as katakanaData } from '../../constants/games/shiritoriKatakana';
 import GameLayout from '../components/GameLayout';
 import GameMenu from '../components/GameMenu';
-import { shiritoriData as hiraganaData } from '../constants/shiritoriHiragana';
-import { shiritoriData as katakanaData } from '../constants/shiritoriKatakana';
 
 const { width, height } = Dimensions.get('window');
 // iPadの画面サイズを考慮して、画面の向きに関係なく判定

@@ -3,9 +3,13 @@ import { Audio } from 'expo-av';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import { Animated, Dimensions, Easing, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { level1Words, level2Words, level3Words, level4Words, level5Words } from '../../constants/games/wordLists';
 import GameLayout from '../components/GameLayout';
 import GameMenu from '../components/GameMenu';
-import { level1Words, level2Words, level3Words, level4Words, level5Words } from '../constants/wordLists';
+
+// 画面サイズの取得（グローバルで宣言）
+const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
+const isSmallScreen = screenWidth < 768;
 
 // 虫の種類
 type BugType = 'ladybug' | 'wasp' | 'butterfly' | 'ant' | 'beetle';
@@ -75,7 +79,6 @@ interface Question {
 interface Frame {
   id: number;
   question: Question | null;
-  isActive: boolean;
 }
 
 // 難易度設定
@@ -170,14 +173,15 @@ export default function BugBattle() {
     message: '',
   });
   const [frames, setFrames] = useState<Frame[]>([
-    { id: 1, question: null, isActive: true },
-    { id: 2, question: null, isActive: false },
-    { id: 3, question: null, isActive: false },
+    { id: 1, question: null },
+    { id: 2, question: null },
+    { id: 3, question: null },
   ]);
 
-  // 画面サイズの取得
-  const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
-  const isSmallScreen = screenWidth < 768;
+  // 連番ID生成用ref
+  const bugIdRef = useRef(0);
+  const enemyIdRef = useRef(0);
+  const particleIdRef = useRef(0);
 
   // 音声の読み込み
   const [sounds, setSounds] = useState<{
@@ -248,312 +252,6 @@ export default function BugBattle() {
       console.error('音声の再生に失敗しました:', error);
     }
   };
-
-  // スタイル定義
-  const styles = StyleSheet.create({
-    container: {
-      flex: 1,
-      backgroundColor: '#f0f0f0',
-    },
-    settingsButton: {
-      position: 'absolute',
-      top: 10,
-      right: 10,
-      zIndex: 2,
-      padding: 10,
-    },
-    gameArea: {
-      flex: 1,
-      position: 'relative',
-      backgroundColor: '#e8f4f8',
-      marginBottom: 20,
-    },
-    questionArea: {
-      backgroundColor: 'white',
-      padding: 20,
-      borderTopLeftRadius: 20,
-      borderTopRightRadius: 20,
-      elevation: 3,
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: -2 },
-      shadowOpacity: 0.25,
-      shadowRadius: 3.84,
-    },
-    questionText: {
-      fontSize: 24,
-      fontWeight: 'bold',
-      color: '#333',
-      marginBottom: 20,
-      textAlign: 'center',
-    },
-    answerArea: {
-      flexDirection: 'row',
-      justifyContent: 'center',
-      flexWrap: 'wrap',
-      padding: 10,
-      minHeight: 200,
-      position: 'relative',
-    },
-    letterCard: {
-      width: 60,
-      height: 60,
-      backgroundColor: '#4a90e2',
-      borderRadius: 10,
-      justifyContent: 'center',
-      alignItems: 'center',
-      margin: 5,
-      elevation: 5,
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.25,
-      shadowRadius: 3.84,
-    },
-    letterCardText: {
-      color: 'white',
-      fontSize: 24,
-      fontWeight: 'bold',
-    },
-    selectedLetterCard: {
-      backgroundColor: '#2c5282',
-    },
-    scoreText: {
-      fontSize: isSmallScreen ? 16 : 20,
-      textAlign: 'center',
-      marginTop: 10,
-    },
-    bug: {
-      position: 'absolute',
-      width: 80,
-      height: 80,
-      borderRadius: 40,
-      justifyContent: 'center',
-      alignItems: 'center',
-      elevation: 5,
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.25,
-      shadowRadius: 3.84,
-      zIndex: 2,
-    },
-    bugEmoji: {
-      fontSize: 50,
-    },
-    enemy: {
-      position: 'absolute',
-      width: 100,
-      height: 100,
-      justifyContent: 'center',
-      alignItems: 'center',
-      elevation: 5,
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.25,
-      shadowRadius: 3.84,
-      zIndex: 2,
-    },
-    enemyText: {
-      color: 'white',
-      fontSize: isSmallScreen ? 10 : 12,
-      fontWeight: 'bold',
-    },
-    levelText: {
-      fontSize: 16,
-      textAlign: 'center',
-      marginBottom: 5,
-      color: '#4a90e2',
-    },
-    comboText: {
-      color: 'white',
-      fontSize: 24,
-      fontWeight: 'bold',
-      textAlign: 'center',
-    },
-    levelUpContainer: {
-      position: 'absolute',
-      top: '50%',
-      left: '50%',
-      transform: [{ translateX: -100 }, { translateY: -50 }],
-      backgroundColor: 'rgba(74, 144, 226, 0.9)',
-      padding: 20,
-      borderRadius: 10,
-      elevation: 5,
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.25,
-      shadowRadius: 3.84,
-    },
-    levelUpText: {
-      color: 'white',
-      fontSize: 32,
-      fontWeight: 'bold',
-      textAlign: 'center',
-    },
-    comboContainer: {
-      position: 'absolute',
-      top: 100,
-      left: '50%',
-      transform: [{ translateX: -50 }],
-      backgroundColor: 'rgba(226, 132, 74, 0.9)',
-      padding: 15,
-      borderRadius: 25,
-      elevation: 5,
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.25,
-      shadowRadius: 3.84,
-      zIndex: 1000,
-    },
-    particle: {
-      position: 'absolute',
-      borderRadius: 50,
-    },
-    particleEmoji: {
-      fontSize: 30,
-    },
-    enemyEmoji: {
-      fontSize: 70,
-    },
-    confirmButton: {
-      position: 'absolute',
-      right: 20,
-      bottom: 20,
-      backgroundColor: '#4a90e2',
-      paddingHorizontal: 20,
-      paddingVertical: 10,
-      borderRadius: 25,
-      elevation: 5,
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.25,
-      shadowRadius: 3.84,
-    },
-    confirmButtonText: {
-      color: 'white',
-      fontSize: 18,
-      fontWeight: 'bold',
-    },
-    framesContainer: {
-      flexDirection: 'row',
-      justifyContent: 'space-around',
-      padding: 10,
-      height: '100%',
-    },
-    frame: {
-      width: '30%',
-      height: '100%',
-      backgroundColor: 'rgba(255, 255, 255, 0.95)',
-      borderRadius: 15,
-      padding: 15,
-      borderWidth: 2,
-      borderColor: '#4a90e2',
-      justifyContent: 'flex-start',
-      alignItems: 'center',
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.25,
-      shadowRadius: 3.84,
-      elevation: 5,
-    },
-    activeFrame: {
-      borderColor: '#e74c3c',
-      borderWidth: 3,
-      backgroundColor: 'rgba(255, 255, 255, 1)',
-    },
-    frameContent: {
-      width: '100%',
-      height: '100%',
-      justifyContent: 'flex-start',
-      alignItems: 'center',
-      paddingTop: 20,
-    },
-    frameText: {
-      fontSize: 16,
-      textAlign: 'center',
-      color: '#333',
-    },
-    bugPreview: {
-      position: 'absolute',
-      top: 10,
-      right: 10,
-      fontSize: 40,
-    },
-    slotsContainer: {
-      flexDirection: 'row',
-      justifyContent: 'center',
-      flexWrap: 'wrap',
-      width: '100%',
-      paddingHorizontal: 5,
-      marginTop: 10,
-    },
-    letterSlot: {
-      width: 40,
-      height: 40,
-      borderWidth: 2,
-      borderColor: '#4a90e2',
-      borderRadius: 8,
-      margin: 3,
-      justifyContent: 'center',
-      alignItems: 'center',
-      backgroundColor: 'rgba(74, 144, 226, 0.1)',
-    },
-    filledSlot: {
-      backgroundColor: '#4a90e2',
-    },
-    letterSlotText: {
-      color: 'white',
-      fontSize: 24,
-      fontWeight: 'bold',
-    },
-    cardsContainer: {
-      flexDirection: 'row',
-      flexWrap: 'wrap',
-      justifyContent: 'center',
-      padding: 10,
-    },
-    battleResultContainer: {
-      position: 'absolute',
-      top: '20%',
-      left: 0,
-      right: 0,
-      alignItems: 'center',
-      justifyContent: 'center',
-      zIndex: 1000,
-    },
-    battleResultText: {
-      fontSize: 24,
-      fontWeight: 'bold',
-      textShadowColor: 'rgba(0, 0, 0, 0.5)',
-      textShadowOffset: { width: 1, height: 1 },
-      textShadowRadius: 2,
-    },
-    availableLettersContainer: {
-      flexDirection: 'row',
-      flexWrap: 'wrap',
-      justifyContent: 'center',
-      padding: 10,
-      marginTop: 20,
-      width: '100%',
-    },
-    availableLetter: {
-      width: 35,
-      height: 35,
-      backgroundColor: '#4a90e2',
-      borderRadius: 8,
-      margin: 3,
-      justifyContent: 'center',
-      alignItems: 'center',
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 1 },
-      shadowOpacity: 0.2,
-      shadowRadius: 1.41,
-      elevation: 2,
-    },
-    availableLetterText: {
-      color: 'white',
-      fontSize: 20,
-      fontWeight: 'bold',
-    },
-  });
 
   // 初期化
   useEffect(() => {
@@ -661,14 +359,11 @@ export default function BugBattle() {
       5: level5Words,
     };
     const currentWordList = wordLists[1];
-    console.log('現在の単語リスト:', currentWordList);
 
-    // 3つの枠すべてに問題を生成
     setFrames(prevFrames => {
       const newFrames = prevFrames.map(frame => {
         const randomIndex = Math.floor(Math.random() * currentWordList.length);
         const question = currentWordList[randomIndex];
-        console.log('生成された問題:', question);
         const slots = Array.from({ length: question.answer.length }, (_, i) => ({
           id: i,
           letter: null,
@@ -681,81 +376,12 @@ export default function BugBattle() {
           },
         };
       });
-      console.log('新しいフレーム状態:', newFrames);
+      // ここでavailableLettersもセット
+      if (newFrames[0]?.question) {
+        setAvailableLetters([...newFrames[0].question.letters].sort(() => Math.random() - 0.5));
+      }
       return newFrames;
     });
-
-    // アクティブな枠の文字を利用可能にする
-    const activeFrame = frames.find(frame => frame.isActive);
-    if (activeFrame?.question) {
-      console.log('アクティブなフレームの文字を設定:', activeFrame.question.letters);
-      setAvailableLetters([...activeFrame.question.letters].sort(() => Math.random() - 0.5));
-    }
-  };
-
-  // 枠の切り替え
-  const switchFrame = (frameId: number) => {
-    setFrames(prevFrames => 
-      prevFrames.map(frame => ({
-        ...frame,
-        isActive: frame.id === frameId,
-      }))
-    );
-  };
-
-  // 文字カードのクリック処理
-  const handleLetterPress = (letter: string) => {
-    const activeFrame = frames.find(frame => frame.isActive);
-    if (!activeFrame?.question) return;
-    
-    // 空いているスロットを探す
-    const emptySlotIndex = activeFrame.question.slots.findIndex(slot => slot.letter === null);
-    if (emptySlotIndex !== -1) {
-      // 空いているスロットに文字を配置
-      setFrames(prevFrames => 
-        prevFrames.map(frame => 
-          frame.id === activeFrame.id
-            ? {
-                ...frame,
-                question: frame.question
-                  ? {
-                      ...frame.question,
-                      slots: frame.question.slots.map((slot, index) => 
-                        index === emptySlotIndex ? { ...slot, letter } : slot
-                      ),
-                    }
-                  : null,
-              }
-            : frame
-        )
-      );
-      // 使用した文字を利用可能な文字から削除
-      setAvailableLetters(prev => prev.filter(l => l !== letter));
-
-      // すべてのスロットが埋まったら判定
-      const updatedSlots = activeFrame.question.slots.map((slot, index) => 
-        index === emptySlotIndex ? { ...slot, letter } : slot
-      );
-      if (updatedSlots.every(slot => slot.letter !== null)) {
-        checkAnswer(updatedSlots);
-      }
-    }
-  };
-
-  // スロットから文字を削除
-  const handleSlotPress = (slotIndex: number) => {
-    if (!currentQuestion) return;
-    const slot = currentQuestion.slots[slotIndex];
-    if (slot.letter) {
-      const newSlots = [...currentQuestion.slots];
-      newSlots[slotIndex] = { ...newSlots[slotIndex], letter: null };
-      setCurrentQuestion({
-        ...currentQuestion,
-        slots: newSlots,
-      });
-      // 削除した文字を利用可能な文字に戻す
-      setAvailableLetters(prev => [...prev, slot.letter!]);
-    }
   };
 
   // ゲームループの開始
@@ -788,7 +414,6 @@ export default function BugBattle() {
     ]);
     
     // 最新の状態を取得して衝突判定を実行
-    console.log('ゲームループ実行 - 現在の味方の数:', bugsRef.current.length, '敵の数:', enemiesRef.current.length);
     checkCollisions();
   };
 
@@ -796,17 +421,14 @@ export default function BugBattle() {
   const updateBugs = () => {
     return new Promise<void>((resolve) => {
       setBugs(prevBugs => {
-        console.log('updateBugs - 現在の味方の数:', prevBugs.length);
         const updatedBugs = prevBugs.map(bug => {
           // 左方向に直線移動
           const newX = bug.x - bug.speed;
-          console.log(`味方 ${bug.id} の位置を更新: x=${Math.round(newX)}, y=${Math.round(bug.y)}`);
           return {
             ...bug,
             x: newX,
           };
         }).filter(bug => bug.x > -100); // 画面外に出た虫を削除
-        console.log('updateBugs - 更新後の味方の数:', updatedBugs.length);
         bugsRef.current = updatedBugs;
         resolve();
         return updatedBugs;
@@ -821,7 +443,6 @@ export default function BugBattle() {
         const updatedEnemies = prevEnemies.map(enemy => {
           // 右方向に直線移動
           const newX = enemy.x + enemy.speed;
-          console.log(`敵 ${enemy.id} の位置を更新: x=${Math.round(newX)}, y=${Math.round(enemy.y)}`);
           return {
             ...enemy,
             x: newX,
@@ -939,20 +560,23 @@ export default function BugBattle() {
 
   // パーティクルの生成
   const createParticles = (x: number, y: number, color: string, count: number = 10, type: 'success' | 'failure' = 'success') => {
-    const newParticles = Array.from({ length: count }, (_, i) => ({
-      id: Date.now() + i,
-      x,
-      y,
-      color,
-      size: Math.random() * 4 + 2,
-      velocity: {
-        x: (Math.random() - 0.5) * 8,
-        y: (Math.random() - 0.5) * 8,
-      },
-      opacity: new Animated.Value(1),
-      scale: new Animated.Value(0),
-      rotation: new Animated.Value(0),
-    }));
+    const newParticles = Array.from({ length: count }, (_, i) => {
+      particleIdRef.current += 1;
+      return {
+        id: particleIdRef.current,
+        x,
+        y,
+        color,
+        size: Math.random() * 4 + 2,
+        velocity: {
+          x: (Math.random() - 0.5) * 8,
+          y: (Math.random() - 0.5) * 8,
+        },
+        opacity: new Animated.Value(1),
+        scale: new Animated.Value(0),
+        rotation: new Animated.Value(0),
+      };
+    });
 
     setParticles(prev => [...prev, ...newParticles]);
 
@@ -1001,8 +625,9 @@ export default function BugBattle() {
     // 味方の種類をランダムに選択（テントウムシ、ハチ、チョウ）
     const bugTypes: BugType[] = ['ladybug', 'wasp', 'butterfly'];
     const bugType = bugTypes[Math.floor(Math.random() * bugTypes.length)];
+    bugIdRef.current += 1;
     const newBug: Bug = {
-      id: Date.now(),
+      id: bugIdRef.current,
       type: bugType,
       x: screenWidth + 50,
       y: screenHeight - 600,
@@ -1013,11 +638,9 @@ export default function BugBattle() {
       scale: new Animated.Value(1),
       opacity: new Animated.Value(1),
     };
-    console.log('新しい味方を作成:', newBug);
     setBugs(prevBugs => {
       const newBugs = [...prevBugs, newBug];
       bugsRef.current = newBugs;
-      console.log('spawnBug - 現在の味方の数:', newBugs.length);
       return newBugs;
     });
     playSound(sounds.bugSpawn);
@@ -1043,8 +666,9 @@ export default function BugBattle() {
 
     const enemyTypes = Object.keys(ENEMY_EMOJIS) as EnemyType[];
     const enemyType = enemyTypes[Math.floor(Math.random() * enemyTypes.length)];
+    enemyIdRef.current += 1;
     const newEnemy: Enemy = {
-      id: Date.now(),
+      id: enemyIdRef.current,
       type: enemyType,
       x: -50,
       y: screenHeight - 600,
@@ -1054,7 +678,7 @@ export default function BugBattle() {
       rotation: new Animated.Value(0),
       scale: new Animated.Value(1),
     };
-    console.log('新しい敵を作成:', newEnemy);
+
     setEnemies(prevEnemies => {
       const newEnemies = [...prevEnemies, newEnemy];
       enemiesRef.current = newEnemies;
@@ -1065,11 +689,10 @@ export default function BugBattle() {
 
   // 答えの確認
   const checkAnswer = (slots: { id: number; letter: string | null }[]) => {
-    const activeFrame = frames.find(frame => frame.isActive);
-    if (!activeFrame?.question) return;
+    if (!frames[0]?.question) return;
 
     const answer = slots.map(slot => slot.letter).join('');
-    if (answer === activeFrame.question.answer) {
+    if (answer === frames[0].question.answer) {
       // 正解の場合
       const baseScore = 10;
       const finalScore = calculateScore(baseScore);
@@ -1101,8 +724,8 @@ export default function BugBattle() {
       const letters = slots.map(slot => slot.letter).filter((letter): letter is string => letter !== null);
       setAvailableLetters(prev => [...prev, ...letters]);
       setFrames(prevFrames => 
-        prevFrames.map(frame => 
-          frame.id === activeFrame.id
+        prevFrames.map((frame, index) => 
+          index === 0
             ? {
                 ...frame,
                 question: frame.question
@@ -1156,6 +779,42 @@ export default function BugBattle() {
         message: '',
       });
     }, 2000);
+  };
+
+  // 文字カードのクリック処理
+  const handleLetterPress = (letter: string) => {
+    if (!frames[0]?.question) return;
+    // 空いているスロットを探す
+    const emptySlotIndex = frames[0].question.slots.findIndex(slot => slot.letter === null);
+    if (emptySlotIndex !== -1) {
+      // 空いているスロットに文字を配置
+      setFrames(prevFrames => 
+        prevFrames.map((frame, index) => 
+          index === 0
+            ? {
+                ...frame,
+                question: frame.question
+                  ? {
+                      ...frame.question,
+                      slots: frame.question.slots.map((slot, i) => 
+                        i === emptySlotIndex ? { ...slot, letter } : slot
+                      ),
+                    }
+                  : null,
+              }
+            : frame
+        )
+      );
+      // 使用した文字を利用可能な文字から削除
+      setAvailableLetters(prev => prev.filter(l => l !== letter));
+      // すべてのスロットが埋まったら判定
+      const updatedSlots = frames[0].question.slots.map((slot, index) => 
+        index === emptySlotIndex ? { ...slot, letter } : slot
+      );
+      if (updatedSlots.every(slot => slot.letter !== null)) {
+        checkAnswer(updatedSlots);
+      }
+    }
   };
 
   return (
@@ -1285,7 +944,7 @@ export default function BugBattle() {
             {frames.map(frame => (
               <View
                 key={frame.id}
-                style={[styles.frame, frame.isActive && styles.activeFrame]}
+                style={styles.frame}
               >
                 <View style={styles.frameContent}>
                   {frame.question ? (
@@ -1315,18 +974,342 @@ export default function BugBattle() {
           </View>
           {/* 利用可能な文字 */}
           <View style={styles.availableLettersContainer}>
-            {availableLetters.map((letter, index) => (
-              <TouchableOpacity
-                key={`available-${index}`}
-                style={styles.availableLetter}
-                onPress={() => handleLetterPress(letter)}
-              >
-                <Text style={styles.availableLetterText}>{letter}</Text>
-              </TouchableOpacity>
-            ))}
+            {availableLetters.length > 0 ? (
+              availableLetters.map((letter, index) => (
+                <TouchableOpacity
+                  key={`available-${index}`}
+                  style={styles.availableLetter}
+                  onPress={() => handleLetterPress(letter)}
+                >
+                  <Text style={styles.availableLetterText}>{letter}</Text>
+                </TouchableOpacity>
+              ))
+            ) : (
+              // 文字がない場合は空の枠を表示
+              Array.from({ length: 5 }).map((_, index) => (
+                <View
+                  key={`empty-${index}`}
+                  style={[
+                    styles.availableLetter,
+                    {
+                      backgroundColor: 'rgba(74, 144, 226, 0.3)',
+                      borderWidth: 2,
+                      borderColor: '#4a90e2',
+                      borderStyle: 'dashed',
+                      minWidth: 35,
+                      minHeight: 35,
+                    }
+                  ]}
+                />
+              ))
+            )}
           </View>
         </View>
       </View>
     </GameLayout>
   );
-} 
+}
+
+// --- ここからスタイル定義 ---
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#f0f0f0',
+  },
+  settingsButton: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    zIndex: 2,
+    padding: 10,
+  },
+  gameArea: {
+    flex: 1,
+    position: 'relative',
+    backgroundColor: '#e8f4f8',
+    marginBottom: 20,
+  },
+  questionArea: {
+    backgroundColor: 'white',
+    padding: 20,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+  },
+  questionText: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 20,
+    textAlign: 'center',
+  },
+  answerArea: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    flexWrap: 'wrap',
+    padding: 10,
+    minHeight: 200,
+    position: 'relative',
+  },
+  letterCard: {
+    width: 60,
+    height: 60,
+    backgroundColor: '#4a90e2',
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+    margin: 5,
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+  },
+  letterCardText: {
+    color: 'white',
+    fontSize: 24,
+    fontWeight: 'bold',
+  },
+  selectedLetterCard: {
+    backgroundColor: '#2c5282',
+  },
+  scoreText: {
+    fontSize: isSmallScreen ? 16 : 20,
+    textAlign: 'center',
+    marginTop: 10,
+  },
+  bug: {
+    position: 'absolute',
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    zIndex: 2,
+  },
+  bugEmoji: {
+    fontSize: 50,
+  },
+  enemy: {
+    position: 'absolute',
+    width: 100,
+    height: 100,
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    zIndex: 2,
+  },
+  enemyText: {
+    color: 'white',
+    fontSize: isSmallScreen ? 10 : 12,
+    fontWeight: 'bold',
+  },
+  levelText: {
+    fontSize: 16,
+    textAlign: 'center',
+    marginBottom: 5,
+    color: '#4a90e2',
+  },
+  comboText: {
+    color: 'white',
+    fontSize: 24,
+    fontWeight: 'bold',
+    textAlign: 'center',
+  },
+  levelUpContainer: {
+    position: 'absolute',
+    top: '50%',
+    left: '50%',
+    transform: [{ translateX: -100 }, { translateY: -50 }],
+    backgroundColor: 'rgba(74, 144, 226, 0.9)',
+    padding: 20,
+    borderRadius: 10,
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+  },
+  levelUpText: {
+    color: 'white',
+    fontSize: 32,
+    fontWeight: 'bold',
+    textAlign: 'center',
+  },
+  comboContainer: {
+    position: 'absolute',
+    top: 100,
+    left: '50%',
+    transform: [{ translateX: -50 }],
+    backgroundColor: 'rgba(226, 132, 74, 0.9)',
+    padding: 15,
+    borderRadius: 25,
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    zIndex: 1000,
+  },
+  particle: {
+    position: 'absolute',
+    borderRadius: 50,
+  },
+  particleEmoji: {
+    fontSize: 30,
+  },
+  enemyEmoji: {
+    fontSize: 70,
+  },
+  confirmButton: {
+    position: 'absolute',
+    right: 20,
+    bottom: 20,
+    backgroundColor: '#4a90e2',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 25,
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+  },
+  confirmButtonText: {
+    color: 'white',
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  framesContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    padding: 10,
+    height: '100%',
+  },
+  frame: {
+    width: '30%',
+    height: '100%',
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: 15,
+    padding: 15,
+    borderWidth: 2,
+    borderColor: '#4a90e2',
+    justifyContent: 'flex-start',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+  frameContent: {
+    width: '100%',
+    height: '100%',
+    justifyContent: 'flex-start',
+    alignItems: 'center',
+    paddingTop: 20,
+  },
+  frameText: {
+    fontSize: 16,
+    textAlign: 'center',
+    color: '#333',
+  },
+  bugPreview: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    fontSize: 40,
+  },
+  slotsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    flexWrap: 'wrap',
+    width: '100%',
+    paddingHorizontal: 5,
+    marginTop: 10,
+  },
+  letterSlot: {
+    width: 40,
+    height: 40,
+    borderWidth: 2,
+    borderColor: '#4a90e2',
+    borderRadius: 8,
+    margin: 3,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(74, 144, 226, 0.1)',
+  },
+  filledSlot: {
+    backgroundColor: '#4a90e2',
+  },
+  letterSlotText: {
+    color: 'white',
+    fontSize: 24,
+    fontWeight: 'bold',
+  },
+  cardsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    padding: 10,
+  },
+  battleResultContainer: {
+    position: 'absolute',
+    top: '20%',
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 1000,
+  },
+  battleResultText: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    textShadowColor: 'rgba(0, 0, 0, 0.5)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 2,
+  },
+  availableLettersContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    padding: 10,
+    marginTop: 20,
+    width: '100%',
+    minHeight: 60,
+    backgroundColor: 'rgba(255, 255, 255, 0.8)',
+    borderRadius: 10,
+  },
+  availableLetter: {
+    width: 35,
+    height: 35,
+    backgroundColor: '#4a90e2',
+    borderRadius: 8,
+    margin: 3,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 1.41,
+    elevation: 2,
+  },
+  availableLetterText: {
+    color: 'white',
+    fontSize: 20,
+    fontWeight: 'bold',
+  },
+}); 

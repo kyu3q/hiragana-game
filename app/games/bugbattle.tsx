@@ -12,15 +12,15 @@ const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 const isSmallScreen = screenWidth < 768;
 
 // 虫の種類
-type BugType = 'ladybug' | 'wasp' | 'butterfly' | 'ant' | 'beetle';
+type BugType = 'ladybug' | 'wasp' | 'butterfly' | 'dragonfly' | 'firefly';
 
 // 虫の絵文字マッピング
 const BUG_EMOJIS = {
   ladybug: '🐞', // テントウムシ
   wasp: '🐝', // ハチ
   butterfly: '🦋', // チョウ
-  ant: '🐜', // アリ
-  beetle: '🪲', // カブトムシ
+  dragonfly: '🦗', // トンボ
+  firefly: '✨', // ホタル
 } as const;
 
 // 虫のサイズ定数
@@ -28,9 +28,33 @@ const BUG_SIZES = {
   ladybug: 40, // テントウムシの半径
   wasp: 35,    // ハチの半径
   butterfly: 45, // チョウの半径
-  ant: 30,     // アリの半径
-  beetle: 45,  // カブトムシの半径
+  dragonfly: 50, // トンボの半径
+  firefly: 35,  // ホタルの半径
 } as const;
+
+// 敵の種類と絵文字のマッピング
+const ENEMY_EMOJIS = {
+  beetle: '🪲', // カブトムシ
+  stag: '🦗', // クワガタ
+  mantis: '🦗', // カマキリ
+} as const;
+
+type EnemyType = keyof typeof ENEMY_EMOJIS;
+
+// 敵のサイズ定数
+const ENEMY_SIZES = {
+  beetle: 45,    // カブトムシの半径
+  stag: 40,      // クワガタの半径
+  mantis: 35,    // カマキリの半径
+} as const;
+
+// 虫の特殊能力
+interface BugAbility {
+  name: string;
+  description: string;
+  cooldown: number;
+  effect: (bug: Bug, enemies: Enemy[]) => void;
+}
 
 // 虫の状態
 interface Bug {
@@ -44,15 +68,9 @@ interface Bug {
   rotation: Animated.Value;
   scale: Animated.Value;
   opacity: Animated.Value;
+  ability: BugAbility;
+  lastAbilityUse: number;
 }
-
-// 敵の種類と絵文字のマッピング
-const ENEMY_EMOJIS = {
-  ant: '🐜', // アリ
-  beetle: '🪲', // カブトムシ
-} as const;
-
-type EnemyType = keyof typeof ENEMY_EMOJIS;
 
 // 敵の状態
 interface Enemy {
@@ -96,11 +114,11 @@ interface Particle {
   id: number;
   x: number;
   y: number;
-  vx: number;
-  vy: number;
+  color: string;
+  size: number;
+  velocity: { x: number; y: number };
   opacity: Animated.Value;
   scale: Animated.Value;
-  emoji: string;
   rotation: Animated.Value;
 }
 
@@ -167,17 +185,7 @@ export default function BugBattle() {
   const [comboAnimation] = useState(new Animated.Value(1));
   const [showLevelUpText, setShowLevelUpText] = useState(false);
   const [showComboText, setShowComboText] = useState(false);
-  const [particles, setParticles] = useState<Array<{
-    id: number;
-    x: number;
-    y: number;
-    color: string;
-    size: number;
-    velocity: { x: number; y: number };
-    opacity: Animated.Value;
-    scale: Animated.Value;
-    rotation: Animated.Value;
-  }>>([]);
+  const [particles, setParticles] = useState<Particle[]>([]);
   const [isAttacking, setIsAttacking] = useState<{[key: number]: boolean}>({});
   const [lastEnemySpawnTime, setLastEnemySpawnTime] = useState(0);
   const [draggingCard, setDraggingCard] = useState<{
@@ -203,7 +211,7 @@ export default function BugBattle() {
   // 連番ID生成用ref
   const bugIdRef = useRef(0);
   const enemyIdRef = useRef(0);
-  const particleIdRef = useRef(0);
+  const particleIdRef = useRef<number>(0);
 
   // 音声の読み込み
   const [sounds, setSounds] = useState<{
@@ -215,6 +223,54 @@ export default function BugBattle() {
     enemySpawn: null,
     collision: null,
   });
+
+  const createParticles = (x: number, y: number, color: string, count: number = 10, type: 'success' | 'failure' = 'success') => {
+    const newParticles: Particle[] = Array.from({ length: count }, () => ({
+      id: particleIdRef.current++,
+      x,
+      y,
+      color,
+      size: Math.random() * 4 + 2,
+      velocity: {
+        x: (Math.random() - 0.5) * 8,
+        y: (Math.random() - 0.5) * 8,
+      },
+      opacity: new Animated.Value(1),
+      scale: new Animated.Value(0),
+      rotation: new Animated.Value(0),
+    }));
+
+    setParticles((prev: Particle[]) => [...prev, ...newParticles]);
+
+    newParticles.forEach((particle: Particle) => {
+      Animated.parallel([
+        Animated.sequence([
+          Animated.timing(particle.scale, {
+            toValue: 1,
+            duration: 200,
+            useNativeDriver: true,
+          }),
+          Animated.timing(particle.scale, {
+            toValue: 0,
+            duration: 300,
+            useNativeDriver: true,
+          }),
+        ]),
+        Animated.timing(particle.opacity, {
+          toValue: 0,
+          duration: 500,
+          useNativeDriver: true,
+        }),
+        Animated.timing(particle.rotation, {
+          toValue: type === 'success' ? 360 : -360,
+          duration: 500,
+          useNativeDriver: true,
+        }),
+      ]).start(() => {
+        setParticles((prev: Particle[]) => prev.filter((p: Particle) => p.id !== particle.id));
+      });
+    });
+  };
 
   // 音声の初期化
   useEffect(() => {
@@ -475,7 +531,7 @@ export default function BugBattle() {
     
     // 虫の大きさを考慮した衝突判定
     const bugRadius = BUG_SIZES[bug.type];
-    const enemyRadius = BUG_SIZES[enemy.type];
+    const enemyRadius = ENEMY_SIZES[enemy.type];
     const collisionThreshold = (bugRadius + enemyRadius) * 1.2; // 衝突判定の距離を20%増加
     
     return distance < collisionThreshold;
@@ -569,58 +625,6 @@ export default function BugBattle() {
     }, 500);
   };
 
-  // パーティクルの生成
-  const createParticles = (x: number, y: number, color: string, count: number = 10, type: 'success' | 'failure' = 'success') => {
-    const newParticles = Array.from({ length: count }, (_, i) => {
-      particleIdRef.current += 1;
-      return {
-        id: particleIdRef.current,
-        x,
-        y,
-        color,
-        size: Math.random() * 4 + 2,
-        velocity: {
-          x: (Math.random() - 0.5) * 8,
-          y: (Math.random() - 0.5) * 8,
-        },
-        opacity: new Animated.Value(1),
-        scale: new Animated.Value(0),
-        rotation: new Animated.Value(0),
-      };
-    });
-
-    setParticles(prev => [...prev, ...newParticles]);
-
-    newParticles.forEach(particle => {
-      Animated.parallel([
-        Animated.sequence([
-          Animated.timing(particle.scale, {
-            toValue: 1,
-            duration: 200,
-            useNativeDriver: true,
-          }),
-          Animated.timing(particle.scale, {
-            toValue: 0,
-            duration: 300,
-            useNativeDriver: true,
-          }),
-        ]),
-        Animated.timing(particle.opacity, {
-          toValue: 0,
-          duration: 500,
-          useNativeDriver: true,
-        }),
-        Animated.timing(particle.rotation, {
-          toValue: type === 'success' ? 360 : -360,
-          duration: 500,
-          useNativeDriver: true,
-        }),
-      ]).start(() => {
-        setParticles(prev => prev.filter(p => p.id !== particle.id));
-      });
-    });
-  };
-
   const handleRetry = () => {
     initializeGame();
   };
@@ -633,8 +637,7 @@ export default function BugBattle() {
   const spawnBug = () => {
     console.log('spawnBug関数が呼び出されました');
     const difficulty = getCurrentDifficulty();
-    // 味方の種類をランダムに選択（テントウムシ、ハチ、チョウ）
-    const bugTypes: BugType[] = ['ladybug', 'wasp', 'butterfly'];
+    const bugTypes: BugType[] = ['ladybug', 'wasp', 'butterfly', 'dragonfly', 'firefly'];
     const bugType = bugTypes[Math.floor(Math.random() * bugTypes.length)];
     bugIdRef.current += 1;
     const newBug: Bug = {
@@ -648,6 +651,8 @@ export default function BugBattle() {
       rotation: new Animated.Value(0),
       scale: new Animated.Value(1),
       opacity: new Animated.Value(1),
+      ability: BUG_ABILITIES[bugType],
+      lastAbilityUse: 0,
     };
     setBugs(prevBugs => {
       const newBugs = [...prevBugs, newBug];
@@ -845,6 +850,95 @@ export default function BugBattle() {
     }
   };
 
+  // 特殊能力を使用する関数を追加
+  const useAbility = (bug: Bug) => {
+    const now = Date.now();
+    if (now - bug.lastAbilityUse < bug.ability.cooldown) {
+      return;
+    }
+
+    bug.ability.effect(bug, enemiesRef.current);
+    setBugs(prevBugs =>
+      prevBugs.map(b =>
+        b.id === bug.id ? { ...b, lastAbilityUse: now } : b
+      )
+    );
+  };
+
+  // 特殊能力の定義
+  const BUG_ABILITIES: Record<BugType, BugAbility> = {
+    ladybug: {
+      name: '防御強化',
+      description: '一時的に防御力が上がり、敵の攻撃を軽減します',
+      cooldown: 10000,
+      effect: (bug: Bug, enemies: Enemy[]) => {
+        // 防御力上昇のエフェクト
+        Animated.sequence([
+          Animated.timing(bug.scale, {
+            toValue: 1.5,
+            duration: 300,
+            useNativeDriver: true,
+          }),
+          Animated.timing(bug.scale, {
+            toValue: 1,
+            duration: 300,
+            useNativeDriver: true,
+          }),
+        ]).start();
+      },
+    },
+    wasp: {
+      name: '毒針',
+      description: '敵に毒ダメージを与えます',
+      cooldown: 15000,
+      effect: (bug: Bug, enemies: Enemy[]) => {
+        // 最も近い敵に毒ダメージを与える
+        const nearestEnemy = enemies.reduce((nearest, current) => {
+          const nearestDist = Math.sqrt(
+            Math.pow(nearest.x - bug.x, 2) + Math.pow(nearest.y - bug.y, 2)
+          );
+          const currentDist = Math.sqrt(
+            Math.pow(current.x - bug.x, 2) + Math.pow(current.y - bug.y, 2)
+          );
+          return currentDist < nearestDist ? current : nearest;
+        });
+        if (nearestEnemy) {
+          createParticles(nearestEnemy.x, nearestEnemy.y, '#4CAF50', 20, 'success');
+        }
+      },
+    },
+    butterfly: {
+      name: '花粉散布',
+      description: '周囲の味方を回復します',
+      cooldown: 20000,
+      effect: (bug: Bug, enemies: Enemy[]) => {
+        // 回復エフェクト
+        createParticles(bug.x, bug.y, '#FFD700', 30, 'success');
+      },
+    },
+    dragonfly: {
+      name: '高速移動',
+      description: '一時的に移動速度が上がります',
+      cooldown: 12000,
+      effect: (bug: Bug, enemies: Enemy[]) => {
+        // 速度上昇エフェクト
+        bug.speed *= 2;
+        setTimeout(() => {
+          bug.speed /= 2;
+        }, 3000);
+      },
+    },
+    firefly: {
+      name: '光の障壁',
+      description: '周囲に光の障壁を展開し、敵の接近を防ぎます',
+      cooldown: 25000,
+      effect: (bug: Bug, enemies: Enemy[]) => {
+        // 光の障壁エフェクト
+        createParticles(bug.x, bug.y, '#FFA500', 40, 'success');
+      },
+    },
+  };
+
   return (
     <GameLayout>
       <View style={styles.container}>
@@ -944,25 +1038,48 @@ export default function BugBattle() {
 
           {/* 虫の表示 */}
           {bugs.map(bug => (
-            <Animated.View
-              key={bug.id}
-              style={[
-                styles.bug,
-                {
-                  backgroundColor: bug.type === 'ladybug' ? '#e74c3c' : bug.type === 'wasp' ? '#f1c40f' : '#9b59b6',
-                  left: bug.x,
-                  top: bug.y,
-                  transform: [
-                    { scale: bug.scale },
-                  ],
-                  opacity: bug.opacity,
-                },
-              ]}
-            >
-              <Text style={styles.bugEmoji}>
-                {BUG_EMOJIS[bug.type]}
-              </Text>
-            </Animated.View>
+            <React.Fragment key={bug.id}>
+              <Animated.View
+                style={[
+                  styles.bug,
+                  {
+                    backgroundColor: bug.type === 'ladybug' ? '#e74c3c' : bug.type === 'wasp' ? '#f1c40f' : '#9b59b6',
+                    left: bug.x,
+                    top: bug.y,
+                    transform: [
+                      { scale: bug.scale },
+                    ],
+                    opacity: bug.opacity,
+                  },
+                ]}
+              >
+                <Text style={styles.bugEmoji}>
+                  {BUG_EMOJIS[bug.type]}
+                </Text>
+              </Animated.View>
+              <TouchableOpacity
+                style={[
+                  styles.abilityButton,
+                  {
+                    left: bug.x + 50,
+                    top: bug.y + 50,
+                  },
+                ]}
+                onPress={() => useAbility(bug)}
+                disabled={Date.now() - bug.lastAbilityUse < bug.ability.cooldown}
+              >
+                <Text style={styles.abilityButtonText}>
+                  {bug.ability.name}
+                </Text>
+                {Date.now() - bug.lastAbilityUse < bug.ability.cooldown && (
+                  <View style={styles.abilityCooldown}>
+                    <Text style={styles.abilityCooldownText}>
+                      {Math.ceil((bug.ability.cooldown - (Date.now() - bug.lastAbilityUse)) / 1000)}s
+                    </Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            </React.Fragment>
           ))}
         </View>
 
@@ -1318,6 +1435,40 @@ const styles = StyleSheet.create({
   availableLetterText: {
     color: 'white',
     fontSize: 20,
+    fontWeight: 'bold',
+  },
+  abilityButton: {
+    position: 'absolute',
+    bottom: 20,
+    right: 20,
+    backgroundColor: '#4a90e2',
+    padding: 15,
+    borderRadius: 25,
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+  },
+  abilityButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  abilityCooldown: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    borderRadius: 25,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  abilityCooldownText: {
+    color: 'white',
+    fontSize: 12,
     fontWeight: 'bold',
   },
 }); 

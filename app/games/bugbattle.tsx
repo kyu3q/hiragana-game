@@ -5,7 +5,18 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Animated, Dimensions, Easing, Platform, StyleSheet, Text, TextStyle, TouchableOpacity, View, ViewStyle } from 'react-native';
 import BugCastleIcon from '../../assets/images/BugCastleIcon';
 import EnemyCastleIcon from '../../assets/images/EnemyCastleIcon';
-import { level1Words, level2Words, level3Words, level4Words, level5Words } from '../../constants/games/wordLists';
+import {
+  katakanaLevel1Words,
+  katakanaLevel2Words,
+  katakanaLevel3Words,
+  katakanaLevel4Words,
+  katakanaLevel5Words,
+  level1Words,
+  level2Words,
+  level3Words,
+  level4Words,
+  level5Words
+} from '../../constants/games/wordLists';
 import GameLayout from '../components/GameLayout';
 import GameMenu from '../components/GameMenu';
 
@@ -109,8 +120,9 @@ interface Question {
 // 3つの枠の状態
 interface Frame {
   id: number;
-  question: Question | null;
-  availableLetters: string[];
+  question: string | null;
+  letters: string[];
+  slots: (string | null)[];
 }
 
 // 難易度設定
@@ -164,22 +176,18 @@ const SUNSET_WORDS = [
 ];
 
 // 1枠分の新しい問題を生成する関数
-const generateSingleQuestion = (usedIndices: number[], currentWordList: any[]): { question: Question; availableLetters: string[]; usedIndex: number } => {
+const generateSingleQuestion = (usedIndices: number[], currentWordList: string[]): { question: string; letters: string[]; slots: (string | null)[]; usedIndex: number } => {
   let randomIndex;
   do {
     randomIndex = Math.floor(Math.random() * currentWordList.length);
   } while (usedIndices.includes(randomIndex));
-  const question = currentWordList[randomIndex];
-  const slots = Array.from({ length: question.answer.length }, (_, i) => ({
-    id: i,
-    letter: null,
-  }));
+  const word = currentWordList[randomIndex];
+  const letters = word.split('').sort(() => Math.random() - 0.5);
+  const slots = Array(word.length).fill(null);
   return {
-    question: {
-      ...question,
-      slots,
-    },
-    availableLetters: [...question.letters].sort(() => Math.random() - 0.5),
+    question: word,
+    letters,
+    slots,
     usedIndex: randomIndex,
   };
 };
@@ -201,6 +209,21 @@ const BUG_COLORS = {
 
 // タワーの幅を定数で定義
 const TOWER_WIDTH = 120;
+
+// wordListsの型をstring[]に統一
+const getWordLists = (isHiragana: boolean) => isHiragana ? {
+  1: (level1Words as string[]),
+  2: (level2Words as string[]),
+  3: (level3Words as string[]),
+  4: (level4Words as string[]),
+  5: (level5Words as string[]),
+} : {
+  1: (katakanaLevel1Words as string[]),
+  2: (katakanaLevel2Words as string[]),
+  3: (katakanaLevel3Words as string[]),
+  4: (katakanaLevel4Words as string[]),
+  5: (katakanaLevel5Words as string[]),
+};
 
 export default function BugBattle() {
   const router = useRouter();
@@ -242,9 +265,9 @@ export default function BugBattle() {
     message: '',
   });
   const [frames, setFrames] = useState<Frame[]>([
-    { id: 1, question: null, availableLetters: [] },
-    { id: 2, question: null, availableLetters: [] },
-    { id: 3, question: null, availableLetters: [] },
+    { id: 1, question: null, letters: [], slots: [] },
+    { id: 2, question: null, letters: [], slots: [] },
+    { id: 3, question: null, letters: [], slots: [] },
   ]);
   const [progressToNextLevel, setProgressToNextLevel] = useState(0);
   const [showScoreAnimation, setShowScoreAnimation] = useState(false);
@@ -490,23 +513,15 @@ export default function BugBattle() {
 
   // 問題の生成
   const generateQuestion = () => {
-    const wordLists = {
-      1: level1Words,
-      2: level2Words,
-      3: level3Words,
-      4: level4Words,
-      5: level5Words,
-    };
-    const currentWordList = wordLists[1];
-    // 3つの異なる単語を選ぶ
     const usedIndices: number[] = [];
     const newFrames = frames.map((frame) => {
-      const { question, availableLetters, usedIndex } = generateSingleQuestion(usedIndices, currentWordList);
+      const { question, letters, slots, usedIndex } = generateSingleQuestion(usedIndices, getWordLists(isHiragana)[1]);
       usedIndices.push(usedIndex);
       return {
         ...frame,
         question,
-        availableLetters,
+        letters,
+        slots,
       };
     });
     setFrames(newFrames);
@@ -732,7 +747,13 @@ export default function BugBattle() {
   };
 
   const handleSwitchKana = () => {
-    setIsHiragana(!isHiragana);
+    setIsHiragana(prev => {
+      const next = !prev;
+      setTimeout(() => {
+        initializeGame();
+      }, 0);
+      return next;
+    });
   };
 
   // 虫の生成
@@ -814,24 +835,15 @@ export default function BugBattle() {
   };
 
   // 答えの確認
-  const checkAnswer = (frameIndex: number, slots: { id: number; letter: string | null }[]) => {
+  const checkAnswer = (frameIndex: number, slots: string[]) => {
     if (!frames[frameIndex]?.question) return;
-    const wordLists = {
-      1: level1Words,
-      2: level2Words,
-      3: level3Words,
-      4: level4Words,
-      5: level5Words,
-    };
-    const currentWordList = wordLists[1];
-    // 既に使われている単語のインデックスを取得
     const usedIndices = frames.map(f => {
       if (!f.question) return -1;
-      return currentWordList.findIndex(w => w.answer === f.question!.answer);
+      return getWordLists(isHiragana)[1].findIndex(w => w === f.question);
     }).filter(idx => idx !== -1 && idx !== undefined && idx !== null && idx !== frameIndex);
 
-    const answer = slots.map(slot => slot.letter).join('');
-    if (answer === frames[frameIndex].question.answer) {
+    const answer = slots.join('');
+    if (answer === frames[frameIndex].question) {
       // 正解の場合
       const baseScore = 10;
       const finalScore = calculateScore(baseScore);
@@ -849,35 +861,24 @@ export default function BugBattle() {
         }
         return newCombo;
       });
-      // 枠に対応する味方を出現させる
-      setTimeout(() => {
-        spawnBug(FRAME_BUG_TYPES[frameIndex + 1]);
-      }, 100);
-      checkLevelUp();
       // 該当枠のみ新しい問題に差し替え
-      const { question, availableLetters, usedIndex } = generateSingleQuestion(usedIndices, currentWordList);
+      const { question, letters, slots: newSlots, usedIndex } = generateSingleQuestion(usedIndices, getWordLists(isHiragana)[1]);
       setFrames(prevFrames => prevFrames.map((frame, idx) =>
         idx === frameIndex
-          ? { ...frame, question, availableLetters }
+          ? { ...frame, question, letters, slots: newSlots }
           : frame
       ));
+      checkLevelUp();
     } else {
       // 不正解の場合
       setConsecutiveCorrect(0);
-      // カードを元に戻す
-      const letters = slots.map(slot => slot.letter).filter((letter): letter is string => letter !== null);
       setFrames(prevFrames =>
         prevFrames.map((frame, idx) =>
           idx === frameIndex
             ? {
                 ...frame,
-                question: frame.question
-                  ? {
-                      ...frame.question,
-                      slots: frame.question.slots.map(slot => ({ ...slot, letter: null })),
-                    }
-                  : null,
-                availableLetters: [...frame.availableLetters, ...letters],
+                slots: frame.slots.map(() => null),
+                letters: [...frame.letters, ...slots.filter(l => l !== null)],
               }
             : frame
         )
@@ -929,7 +930,7 @@ export default function BugBattle() {
   const handleLetterPress = (frameIndex: number, letter: string) => {
     if (!frames[frameIndex]?.question) return;
     // 空いているスロットを探す
-    const emptySlotIndex = frames[frameIndex].question.slots.findIndex(slot => slot.letter === null);
+    const emptySlotIndex = frames[frameIndex].slots.findIndex(slot => slot === null);
     if (emptySlotIndex !== -1) {
       // 空いているスロットに文字を配置
       setFrames(prevFrames =>
@@ -937,25 +938,16 @@ export default function BugBattle() {
           idx === frameIndex
             ? {
                 ...frame,
-                question: frame.question
-                  ? {
-                      ...frame.question,
-                      slots: frame.question.slots.map((slot, i) =>
-                        i === emptySlotIndex ? { ...slot, letter } : slot
-                      ),
-                    }
-                  : null,
-                availableLetters: frame.availableLetters.filter(l => l !== letter),
+                slots: frame.slots.map((l, i) => i === emptySlotIndex ? letter : l),
+                letters: frame.letters.filter(l => l !== letter),
               }
             : frame
         )
       );
       // すべてのスロットが埋まったら判定
-      const updatedSlots = frames[frameIndex].question.slots.map((slot, index) =>
-        index === emptySlotIndex ? { ...slot, letter } : slot
-      );
-      if (updatedSlots.every(slot => slot.letter !== null)) {
-        checkAnswer(frameIndex, updatedSlots);
+      const updatedSlots = frames[frameIndex].slots.map((l, i) => i === emptySlotIndex ? letter : l);
+      if (updatedSlots.every(l => l !== null)) {
+        checkAnswer(frameIndex, updatedSlots as string[]);
       }
     }
   };
@@ -1386,25 +1378,25 @@ export default function BugBattle() {
                           {BUG_EMOJIS[frame.id === 1 ? 'ladybug' : frame.id === 2 ? 'wasp' : 'butterfly']}
                         </Text>
                         <View style={styles.slotsContainer}>
-                          {frame.question.slots.map((slot, index) => (
+                          {frame.slots.map((slot, index) => (
                             <View
                               key={`slot-${index}`}
                               style={[
-                                styles.letterSlot, 
-                                slot.letter ? styles.filledSlot : null,
+                                styles.letterSlot,
+                                slot ? styles.filledSlot : null,
                                 isSmallScreen && styles.letterSlotSmall
                               ]}
                             >
-                              {slot.letter && (
+                              {slot && (
                                 <Text style={[styles.letterSlotText, isSmallScreen && styles.letterSlotTextSmall]}>
-                                  {slot.letter}
+                                  {slot}
                                 </Text>
                               )}
                             </View>
                           ))}
                         </View>
                         <View style={styles.availableLettersContainer}>
-                          {frame.availableLetters.map((letter, index) => (
+                          {frame.letters.map((letter, index) => (
                             <TouchableOpacity
                               key={`available-${index}`}
                               style={[styles.availableLetter, isSmallScreen && styles.availableLetterSmall]}

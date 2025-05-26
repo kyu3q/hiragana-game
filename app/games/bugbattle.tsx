@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Audio } from 'expo-av';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
-import { Animated, Dimensions, Easing, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Animated, Dimensions, Easing, Platform, StyleSheet, Text, TextStyle, TouchableOpacity, View, ViewStyle } from 'react-native';
 import { level1Words, level2Words, level3Words, level4Words, level5Words } from '../../constants/games/wordLists';
 import GameLayout from '../components/GameLayout';
 import GameMenu from '../components/GameMenu';
@@ -12,14 +12,13 @@ const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 const isSmallScreen = screenWidth < 768;
 
 // 虫の種類
-type BugType = 'ladybug' | 'wasp' | 'butterfly' | 'dragonfly' | 'firefly';
+type BugType = 'ladybug' | 'wasp' | 'butterfly' | 'firefly';
 
 // 虫の絵文字マッピング
 const BUG_EMOJIS = {
   ladybug: '🐞', // テントウムシ
   wasp: '🐝', // ハチ
   butterfly: '🦋', // チョウ
-  dragonfly: '🦗', // トンボ
   firefly: '✨', // ホタル
 } as const;
 
@@ -34,9 +33,9 @@ const BUG_SIZES = {
 
 // 敵の種類と絵文字のマッピング
 const ENEMY_EMOJIS = {
-  beetle: '🪲', // カブトムシ
-  stag: '🦗', // クワガタ
-  mantis: '🦗', // カマキリ
+  beetle: '🍊', // カブトムシ
+  stag: '🍎', // クワガタ
+  mantis: '🍏', // カマキリ
 } as const;
 
 type EnemyType = keyof typeof ENEMY_EMOJIS;
@@ -70,6 +69,12 @@ interface Bug {
   opacity: Animated.Value;
   ability: BugAbility;
   lastAbilityUse: number;
+  hp: number;
+  maxHp: number;
+  defense: number;
+  baseDefense: number;
+  isDefenseBoosted: boolean;
+  defenseBoostTimer: number | null;
 }
 
 // 敵の状態
@@ -83,6 +88,12 @@ interface Enemy {
   speed: number;
   rotation: Animated.Value;
   scale: Animated.Value;
+  hp: number;
+  maxHp: number;
+  attack: number;
+  isPoisoned: boolean;
+  poisonTimer: number | null;
+  poisonDamage: number;
 }
 
 // 問題の状態
@@ -163,6 +174,21 @@ const generateSingleQuestion = (usedIndices: number[], currentWordList: any[]): 
   };
 };
 
+// 枠と虫の種類のマッピング
+const FRAME_BUG_TYPES: Record<number, BugType> = {
+  1: 'ladybug',  // 1番目の枠はテントウムシ
+  2: 'wasp',     // 2番目の枠はハチ
+  3: 'butterfly', // 3番目の枠はチョウ
+};
+
+// 虫の色の定義を追加
+const BUG_COLORS = {
+  ladybug: '#e74c3c',
+  wasp: '#f1c40f',
+  butterfly: '#9b59b6',
+  firefly: '#4a90e2',
+} as const;
+
 export default function BugBattle() {
   const router = useRouter();
   const [bugs, setBugs] = useState<Bug[]>([]);
@@ -207,6 +233,9 @@ export default function BugBattle() {
     { id: 2, question: null, availableLetters: [] },
     { id: 3, question: null, availableLetters: [] },
   ]);
+  const [progressToNextLevel, setProgressToNextLevel] = useState(0);
+  const [showScoreAnimation, setShowScoreAnimation] = useState(false);
+  const [scoreAnimationValue] = useState(new Animated.Value(1));
 
   // 連番ID生成用ref
   const bugIdRef = useRef(0);
@@ -423,7 +452,7 @@ export default function BugBattle() {
     // 初期の味方を生成（少し遅延させて確実に生成されるようにする）
     setTimeout(() => {
       console.log('初期の味方を生成します');
-      spawnBug();
+      spawnBug(FRAME_BUG_TYPES[1]);
     }, 100);
   };
 
@@ -474,11 +503,45 @@ export default function BugBattle() {
 
   // ゲーム状態の更新
   const updateGameState = async () => {
+    const now = Date.now();
+
     // 状態の更新を同期的に行う
     await Promise.all([
       updateBugs(),
       updateEnemies()
     ]);
+    
+    // 特殊効果の更新
+    setBugs(prevBugs => {
+      return prevBugs.map(bug => {
+        // 防御強化の効果時間チェック
+        if (bug.isDefenseBoosted && bug.defenseBoostTimer && now > bug.defenseBoostTimer) {
+          bug.defense = bug.baseDefense;
+          bug.isDefenseBoosted = false;
+          bug.defenseBoostTimer = null;
+        }
+        return bug;
+      });
+    });
+
+    setEnemies(prevEnemies => {
+      return prevEnemies.map(enemy => {
+        // 毒ダメージの処理
+        if (enemy.isPoisoned && enemy.poisonTimer && now > enemy.poisonTimer) {
+          enemy.isPoisoned = false;
+          enemy.poisonTimer = null;
+          enemy.poisonDamage = 0;
+        } else if (enemy.isPoisoned) {
+          enemy.hp -= enemy.poisonDamage;
+          if (enemy.hp <= 0) {
+            // 敵の消滅処理
+            animateEnemyDisappearance(enemy);
+            return null;
+          }
+        }
+        return enemy;
+      }).filter((enemy): enemy is Enemy => enemy !== null);
+    });
     
     // 最新の状態を取得して衝突判定を実行
     checkCollisions();
@@ -539,7 +602,6 @@ export default function BugBattle() {
 
   // 衝突判定と処理
   const checkCollisions = () => {
-    // 最新の状態を取得
     const currentBugs = bugsRef.current;
     const currentEnemies = enemiesRef.current;
     
@@ -549,16 +611,17 @@ export default function BugBattle() {
           // 攻撃アニメーション
           playAttackAnimation(enemy.id);
 
-          // 結果をランダムに決定（50%の確率で成功）
-          const isSuccess = Math.random() > 0.5;
+          // ダメージ計算
+          const damage = Math.max(1, enemy.attack - bug.defense);
+          bug.hp -= damage;
 
-          // パーティクルエフェクト（成功時は緑、失敗時は赤）
+          // パーティクルエフェクト
           createParticles(
             (bug.x + enemy.x) / 2,
             (bug.y + enemy.y) / 2,
-            isSuccess ? '#4CAF50' : '#F44336',
+            bug.hp <= 0 ? '#F44336' : '#4CAF50',
             30,
-            isSuccess ? 'success' : 'failure'
+            bug.hp <= 0 ? 'failure' : 'success'
           );
 
           // 衝突音
@@ -569,11 +632,13 @@ export default function BugBattle() {
           const penalty = Math.floor(5 * difficulty.scoreMultiplier);
           setScore(prev => Math.max(0, prev - penalty));
 
-          // 虫の消滅アニメーション
-          animateBugDisappearance(bug);
-
-          // 敵の消滅アニメーション
-          animateEnemyDisappearance(enemy);
+          // HPが0以下になった場合の処理
+          if (bug.hp <= 0) {
+            animateBugDisappearance(bug);
+          }
+          if (enemy.hp <= 0) {
+            animateEnemyDisappearance(enemy);
+          }
 
           // 画面シェイク
           shakeScreen();
@@ -634,11 +699,9 @@ export default function BugBattle() {
   };
 
   // 虫の生成
-  const spawnBug = () => {
+  const spawnBug = (bugType: BugType) => {
     console.log('spawnBug関数が呼び出されました');
     const difficulty = getCurrentDifficulty();
-    const bugTypes: BugType[] = ['ladybug', 'wasp', 'butterfly', 'dragonfly', 'firefly'];
-    const bugType = bugTypes[Math.floor(Math.random() * bugTypes.length)];
     bugIdRef.current += 1;
     const newBug: Bug = {
       id: bugIdRef.current,
@@ -653,6 +716,12 @@ export default function BugBattle() {
       opacity: new Animated.Value(1),
       ability: BUG_ABILITIES[bugType],
       lastAbilityUse: 0,
+      hp: 100,
+      maxHp: 100,
+      defense: 10,
+      baseDefense: 10,
+      isDefenseBoosted: false,
+      defenseBoostTimer: null,
     };
     setBugs(prevBugs => {
       const newBugs = [...prevBugs, newBug];
@@ -665,11 +734,9 @@ export default function BugBattle() {
   // 敵の生成
   const spawnEnemy = () => {
     const difficulty = getCurrentDifficulty();
-    // 現在の敵の数をチェック
     const currentEnemyCount = enemiesRef.current.length;
-    const maxEnemies = 10; // 最大敵数を10に増やす
+    const maxEnemies = 10;
 
-    // 最大敵数に達している場合は生成しない
     if (currentEnemyCount >= maxEnemies) {
       console.log('最大敵数に達しているため、新しい敵は生成しません');
       return;
@@ -693,6 +760,12 @@ export default function BugBattle() {
       speed: difficulty.enemySpeed,
       rotation: new Animated.Value(0),
       scale: new Animated.Value(1),
+      hp: 50,
+      maxHp: 50,
+      attack: 15,
+      isPoisoned: false,
+      poisonTimer: null,
+      poisonDamage: 0,
     };
 
     setEnemies(prevEnemies => {
@@ -726,11 +799,11 @@ export default function BugBattle() {
       const baseScore = 10;
       const finalScore = calculateScore(baseScore);
       setScore(prev => {
-        const newScore = prev + finalScore;
-        if (newScore > highScore) {
-          setHighScore(newScore);
+        const updatedScore = prev + finalScore;
+        if (updatedScore > highScore) {
+          setHighScore(updatedScore);
         }
-        return newScore;
+        return updatedScore;
       });
       setConsecutiveCorrect(prev => {
         const newCombo = prev + 1;
@@ -739,9 +812,9 @@ export default function BugBattle() {
         }
         return newCombo;
       });
-      // 必ず味方を出現させる
+      // 枠に対応する味方を出現させる
       setTimeout(() => {
-        spawnBug();
+        spawnBug(FRAME_BUG_TYPES[frameIndex + 1]);
       }, 100);
       checkLevelUp();
       // 該当枠のみ新しい問題に差し替え
@@ -869,30 +942,37 @@ export default function BugBattle() {
   const BUG_ABILITIES: Record<BugType, BugAbility> = {
     ladybug: {
       name: '防御強化',
-      description: '一時的に防御力が上がり、敵の攻撃を軽減します',
+      description: '一時的に防御力が2倍になり、敵の攻撃を軽減します',
       cooldown: 10000,
       effect: (bug: Bug, enemies: Enemy[]) => {
         // 防御力上昇のエフェクト
+        bug.defense = bug.baseDefense * 2;
+        bug.isDefenseBoosted = true;
+        bug.defenseBoostTimer = Date.now() + 5000; // 5秒間効果持続
+
         Animated.sequence([
           Animated.timing(bug.scale, {
             toValue: 1.5,
             duration: 300,
-            useNativeDriver: true,
+            useNativeDriver: Platform.OS !== 'web',
           }),
           Animated.timing(bug.scale, {
             toValue: 1,
             duration: 300,
-            useNativeDriver: true,
+            useNativeDriver: Platform.OS !== 'web',
           }),
         ]).start();
+
+        // 防御強化のパーティクルエフェクト
+        createParticles(bug.x, bug.y, '#4a90e2', 20, 'success');
       },
     },
     wasp: {
       name: '毒針',
-      description: '敵に毒ダメージを与えます',
+      description: '最も近い敵に毒ダメージを与えます（5秒間、毎秒10ダメージ）',
       cooldown: 15000,
       effect: (bug: Bug, enemies: Enemy[]) => {
-        // 最も近い敵に毒ダメージを与える
+        // 最も近い敵を探す
         const nearestEnemy = enemies.reduce((nearest, current) => {
           const nearestDist = Math.sqrt(
             Math.pow(nearest.x - bug.x, 2) + Math.pow(nearest.y - bug.y, 2)
@@ -902,232 +982,322 @@ export default function BugBattle() {
           );
           return currentDist < nearestDist ? current : nearest;
         });
+
         if (nearestEnemy) {
+          // 毒状態を付与
+          nearestEnemy.isPoisoned = true;
+          nearestEnemy.poisonTimer = Date.now() + 5000; // 5秒間効果持続
+          nearestEnemy.poisonDamage = 10; // 毎秒10ダメージ
+
+          // 毒のパーティクルエフェクト
           createParticles(nearestEnemy.x, nearestEnemy.y, '#4CAF50', 20, 'success');
         }
       },
     },
     butterfly: {
       name: '花粉散布',
-      description: '周囲の味方を回復します',
+      description: '周囲の味方を回復します（HPを30%回復）',
       cooldown: 20000,
       effect: (bug: Bug, enemies: Enemy[]) => {
-        // 回復エフェクト
-        createParticles(bug.x, bug.y, '#FFD700', 30, 'success');
-      },
-    },
-    dragonfly: {
-      name: '高速移動',
-      description: '一時的に移動速度が上がります',
-      cooldown: 12000,
-      effect: (bug: Bug, enemies: Enemy[]) => {
-        // 速度上昇エフェクト
-        bug.speed *= 2;
-        setTimeout(() => {
-          bug.speed /= 2;
-        }, 3000);
+        // 周囲の味方を回復
+        setBugs(prevBugs => {
+          return prevBugs.map(b => {
+            const distance = Math.sqrt(
+              Math.pow(b.x - bug.x, 2) + Math.pow(b.y - bug.y, 2)
+            );
+            if (distance < 200) { // 200px以内の味方を回復
+              const healAmount = Math.floor(b.maxHp * 0.3); // 30%回復
+              b.hp = Math.min(b.maxHp, b.hp + healAmount);
+              // 回復のパーティクルエフェクト
+              createParticles(b.x, b.y, '#FFD700', 15, 'success');
+            }
+            return b;
+          });
+        });
       },
     },
     firefly: {
       name: '光の障壁',
-      description: '周囲に光の障壁を展開し、敵の接近を防ぎます',
+      description: '周囲に光の障壁を展開し、敵の接近を防ぎます（5秒間）',
       cooldown: 25000,
       effect: (bug: Bug, enemies: Enemy[]) => {
-        // 光の障壁エフェクト
+        // 障壁のパーティクルエフェクト
         createParticles(bug.x, bug.y, '#FFA500', 40, 'success');
+
+        // 敵の移動を制限
+        setEnemies(prevEnemies => {
+          return prevEnemies.map(enemy => {
+            const distance = Math.sqrt(
+              Math.pow(enemy.x - bug.x, 2) + Math.pow(enemy.y - bug.y, 2)
+            );
+            if (distance < 150) { // 150px以内の敵の移動を制限
+              enemy.speed *= 0.5; // 速度を50%に減少
+            }
+            return enemy;
+          });
+        });
       },
     },
+  };
+
+  // スコア獲得時のアニメーション
+  const playScoreAnimation = (score: number) => {
+    setShowScoreAnimation(true);
+    scoreAnimationValue.setValue(1);
+    Animated.sequence([
+      Animated.timing(scoreAnimationValue, {
+        toValue: 1.5,
+        duration: 200,
+        useNativeDriver: Platform.OS !== 'web',
+      }),
+      Animated.timing(scoreAnimationValue, {
+        toValue: 1,
+        duration: 200,
+        useNativeDriver: Platform.OS !== 'web',
+      }),
+    ]).start(() => {
+      setShowScoreAnimation(false);
+    });
+  };
+
+  // スコア更新時の処理を修正
+  const updateScore = (newScore: number) => {
+    setScore(prev => {
+      const updatedScore = prev + newScore;
+      playScoreAnimation(newScore);
+      // 次のレベルまでの進捗を計算
+      const nextLevelThreshold = currentLevel * 100;
+      const progress = (updatedScore % 100) / 100;
+      setProgressToNextLevel(progress);
+      return updatedScore;
+    });
   };
 
   return (
     <GameLayout>
       <View style={styles.container}>
-        <TouchableOpacity
-          style={styles.settingsButton}
-          onPress={() => setIsSettingsVisible(true)}
-        >
-          <Ionicons name="ellipsis-horizontal" size={24} color="#333" />
-        </TouchableOpacity>
-        <GameMenu
-          visible={isSettingsVisible}
-          onClose={() => setIsSettingsVisible(false)}
-          onRetry={handleRetry}
-          onSwitchKana={handleSwitchKana}
-          isHiragana={isHiragana}
-          currentGame="bugbattle"
-        />
+        <View style={styles.gameContainer}>
+          {/* スコア表示を追加 */}
+          <View style={styles.scoreDisplay}>
+            <Text style={styles.scoreText}>スコア: {score}</Text>
+          </View>
 
-        <View style={[styles.gameArea, { height: screenHeight - 400 }]}>
-          {/* レベルアップ演出 */}
-          {showLevelUpText && (
-            <Animated.View
-              style={[
-                styles.levelUpContainer,
-                {
-                  transform: [{ scale: levelUpAnimation }],
-                },
-              ]}
-            >
-              <Text style={styles.levelUpText}>
-                レベルアップ！
-              </Text>
-            </Animated.View>
-          )}
+          <TouchableOpacity
+            style={styles.settingsButton}
+            onPress={() => setIsSettingsVisible(true)}
+          >
+            <Ionicons name="ellipsis-horizontal" size={24} color="#333" />
+          </TouchableOpacity>
+          <GameMenu
+            visible={isSettingsVisible}
+            onClose={() => setIsSettingsVisible(false)}
+            onRetry={handleRetry}
+            onSwitchKana={handleSwitchKana}
+            isHiragana={isHiragana}
+            currentGame="bugbattle"
+          />
 
-          {/* コンボ演出 */}
-          {showComboText && (
-            <Animated.View
-              style={[
-                styles.comboContainer,
-                {
-                  transform: [{ scale: comboAnimation }],
-                },
-              ]}
-            >
-              <Text style={styles.comboText}>
-                {consecutiveCorrect}コンボ！
-              </Text>
-            </Animated.View>
-          )}
-
-          {/* パーティクルエフェクト */}
-          {particles.map(particle => (
-            <Animated.View
-              key={particle.id}
-              style={[
-                styles.particle,
-                {
-                  left: particle.x,
-                  top: particle.y,
-                  backgroundColor: particle.color,
-                  width: particle.size,
-                  height: particle.size,
-                  opacity: particle.opacity,
-                  transform: [
-                    { scale: particle.scale },
-                    { rotate: particle.rotation.interpolate({
-                      inputRange: [0, 360],
-                      outputRange: ['0deg', '360deg']
-                    })}
-                  ],
-                },
-              ]}
-            />
-          ))}
-
-          {/* 敵の表示 */}
-          {enemies.map(enemy => (
-            <Animated.View
-              key={enemy.id}
-              style={[
-                styles.enemy,
-                {
-                  left: enemy.x,
-                  top: enemy.y,
-                  transform: [
-                    { scale: isAttacking[enemy.id] ? 1.8 : enemy.scale },
-                  ],
-                },
-              ]}
-            >
-              <Text style={styles.enemyEmoji}>
-                {ENEMY_EMOJIS[enemy.type]}
-              </Text>
-            </Animated.View>
-          ))}
-
-          {/* 虫の表示 */}
-          {bugs.map(bug => (
-            <React.Fragment key={bug.id}>
+          <View style={[styles.gameArea, { height: screenHeight - 400 }]}>
+            {/* レベルアップ演出 */}
+            {showLevelUpText && (
               <Animated.View
                 style={[
-                  styles.bug,
+                  styles.levelUpContainer,
                   {
-                    backgroundColor: bug.type === 'ladybug' ? '#e74c3c' : bug.type === 'wasp' ? '#f1c40f' : '#9b59b6',
-                    left: bug.x,
-                    top: bug.y,
-                    transform: [
-                      { scale: bug.scale },
-                    ],
-                    opacity: bug.opacity,
+                    transform: [{ scale: levelUpAnimation }],
                   },
                 ]}
               >
-                <Text style={styles.bugEmoji}>
-                  {BUG_EMOJIS[bug.type]}
+                <Text style={styles.levelUpText}>
+                  レベルアップ！
                 </Text>
               </Animated.View>
-              <TouchableOpacity
+            )}
+
+            {/* コンボ演出 */}
+            {showComboText && (
+              <Animated.View
                 style={[
-                  styles.abilityButton,
+                  styles.comboContainer,
                   {
-                    left: bug.x + 50,
-                    top: bug.y + 50,
+                    transform: [{ scale: comboAnimation }],
                   },
                 ]}
-                onPress={() => useAbility(bug)}
-                disabled={Date.now() - bug.lastAbilityUse < bug.ability.cooldown}
               >
-                <Text style={styles.abilityButtonText}>
-                  {bug.ability.name}
+                <Text style={styles.comboText}>
+                  {consecutiveCorrect}コンボ！
                 </Text>
-                {Date.now() - bug.lastAbilityUse < bug.ability.cooldown && (
-                  <View style={styles.abilityCooldown}>
-                    <Text style={styles.abilityCooldownText}>
-                      {Math.ceil((bug.ability.cooldown - (Date.now() - bug.lastAbilityUse)) / 1000)}s
-                    </Text>
-                  </View>
-                )}
-              </TouchableOpacity>
-            </React.Fragment>
-          ))}
-        </View>
+              </Animated.View>
+            )}
 
-        <View style={[styles.questionArea, { position: 'absolute', bottom: 0, left: 0, right: 0, height: 300 }]}>
-          {/* 3つの枠 */}
-          <View style={styles.framesContainer}>
-            {frames.map((frame, frameIndex) => (
-              <View
-                key={frame.id}
-                style={styles.frame}
-              >
-                <View style={styles.frameContent}>
-                  {frame.question ? (
-                    <>
-                      <Text style={styles.bugPreview}>
-                        {BUG_EMOJIS[frame.id === 1 ? 'ladybug' : frame.id === 2 ? 'wasp' : 'butterfly']}
-                      </Text>
-                      <View style={styles.slotsContainer}>
-                        {frame.question.slots.map((slot, index) => (
-                          <View
-                            key={`slot-${index}`}
-                            style={[styles.letterSlot, slot.letter ? styles.filledSlot : null]}
-                          >
-                            {slot.letter && (
-                              <Text style={styles.letterSlotText}>{slot.letter}</Text>
-                            )}
-                          </View>
-                        ))}
-                      </View>
-                      {/* 利用可能な文字（各枠ごと）をスロットの下に移動 */}
-                      <View style={styles.availableLettersContainer}>
-                        {frame.availableLetters.map((letter, index) => (
-                          <TouchableOpacity
-                            key={`available-${index}`}
-                            style={styles.availableLetter}
-                            onPress={() => handleLetterPress(frameIndex, letter)}
-                          >
-                            <Text style={styles.availableLetterText}>{letter}</Text>
-                          </TouchableOpacity>
-                        ))}
-                      </View>
-                    </>
-                  ) : (
-                    <Text style={styles.frameText}>枠 {frame.id}</Text>
-                  )}
-                </View>
-              </View>
+            {/* パーティクルエフェクト */}
+            {particles.map(particle => (
+              <Animated.View
+                key={particle.id}
+                style={[
+                  styles.particle,
+                  {
+                    left: particle.x,
+                    top: particle.y,
+                    backgroundColor: particle.color,
+                    width: particle.size,
+                    height: particle.size,
+                    opacity: particle.opacity,
+                    transform: [
+                      { scale: particle.scale },
+                      { rotate: particle.rotation.interpolate({
+                        inputRange: [0, 360],
+                        outputRange: ['0deg', '360deg']
+                      })}
+                    ],
+                  },
+                ]}
+              />
             ))}
+
+            {/* 敵の表示 */}
+            {enemies.map(enemy => (
+              <Animated.View
+                key={enemy.id}
+                style={[
+                  styles.enemy,
+                  {
+                    left: enemy.x,
+                    top: enemy.y,
+                    transform: [
+                      { scale: isAttacking[enemy.id] ? 1.8 : enemy.scale },
+                    ],
+                  },
+                ]}
+              >
+                <Text style={styles.enemyEmoji}>
+                  {ENEMY_EMOJIS[enemy.type]}
+                </Text>
+              </Animated.View>
+            ))}
+
+            {/* 虫の表示 */}
+            {bugs.map(bug => (
+              <React.Fragment key={bug.id}>
+                <Animated.View
+                  style={[
+                    styles.bug,
+                    {
+                      backgroundColor: BUG_COLORS[bug.type],
+                      left: bug.x,
+                      top: bug.y,
+                      transform: [
+                        { scale: bug.scale },
+                      ],
+                      opacity: bug.opacity,
+                    },
+                  ]}
+                >
+                  <Text style={styles.bugEmoji}>
+                    {BUG_EMOJIS[bug.type]}
+                  </Text>
+                </Animated.View>
+                <TouchableOpacity
+                  style={[
+                    styles.abilityButton,
+                    {
+                      backgroundColor: Date.now() - bug.lastAbilityUse < bug.ability.cooldown
+                        ? '#ccc'
+                        : '#4a90e2',
+                    },
+                  ]}
+                  onPress={() => useAbility(bug)}
+                  disabled={Date.now() - bug.lastAbilityUse < bug.ability.cooldown}
+                >
+                  <Text style={styles.abilityButtonText}>
+                    {bug.ability.name}
+                  </Text>
+                  {Date.now() - bug.lastAbilityUse < bug.ability.cooldown && (
+                    <View style={styles.abilityCooldown}>
+                      <Text style={styles.abilityCooldownText}>
+                        {Math.ceil((bug.ability.cooldown - (Date.now() - bug.lastAbilityUse)) / 1000)}s
+                      </Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+              </React.Fragment>
+            ))}
+          </View>
+
+          <View style={[styles.questionArea, { 
+            position: 'absolute', 
+            bottom: 0, 
+            left: 0, 
+            right: 0, 
+            height: isSmallScreen ? 100 : 300,
+            zIndex: 1000,
+            backgroundColor: 'white',
+            borderTopLeftRadius: 20,
+            borderTopRightRadius: 20,
+            elevation: 5,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: -2 },
+            shadowOpacity: 0.25,
+            shadowRadius: 3.84,
+          }]}>
+            <View style={styles.framesContainer}>
+              {frames.map((frame, frameIndex) => (
+                <View
+                  key={frame.id}
+                  style={[
+                    styles.frame,
+                    isSmallScreen && styles.frameSmall,
+                    {
+                      borderColor: BUG_COLORS[frame.id === 1 ? 'ladybug' : frame.id === 2 ? 'wasp' : 'butterfly']
+                    }
+                  ]}
+                >
+                  <View style={styles.frameContent}>
+                    {frame.question ? (
+                      <>
+                        <Text style={[styles.bugPreview, isSmallScreen && styles.bugPreviewSmall]}>
+                          {BUG_EMOJIS[frame.id === 1 ? 'ladybug' : frame.id === 2 ? 'wasp' : 'butterfly']}
+                        </Text>
+                        <View style={styles.slotsContainer}>
+                          {frame.question.slots.map((slot, index) => (
+                            <View
+                              key={`slot-${index}`}
+                              style={[
+                                styles.letterSlot, 
+                                slot.letter ? styles.filledSlot : null,
+                                isSmallScreen && styles.letterSlotSmall
+                              ]}
+                            >
+                              {slot.letter && (
+                                <Text style={[styles.letterSlotText, isSmallScreen && styles.letterSlotTextSmall]}>
+                                  {slot.letter}
+                                </Text>
+                              )}
+                            </View>
+                          ))}
+                        </View>
+                        <View style={styles.availableLettersContainer}>
+                          {frame.availableLetters.map((letter, index) => (
+                            <TouchableOpacity
+                              key={`available-${index}`}
+                              style={[styles.availableLetter, isSmallScreen && styles.availableLetterSmall]}
+                              onPress={() => handleLetterPress(frameIndex, letter)}
+                              activeOpacity={0.7}
+                            >
+                              <Text style={[styles.availableLetterText, isSmallScreen && styles.availableLetterTextSmall]}>
+                                {letter}
+                              </Text>
+                            </TouchableOpacity>
+                          ))}
+                        </View>
+                      </>
+                    ) : (
+                      <Text style={[styles.frameText, isSmallScreen && styles.frameTextSmall]}>枠 {frame.id}</Text>
+                    )}
+                  </View>
+                </View>
+              ))}
+            </View>
           </View>
         </View>
       </View>
@@ -1135,25 +1305,28 @@ export default function BugBattle() {
   );
 }
 
-// --- ここからスタイル定義 ---
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f0f0f0',
-  },
+  } as ViewStyle,
+  gameContainer: {
+    flex: 1,
+    position: 'relative',
+  } as ViewStyle,
   settingsButton: {
     position: 'absolute',
     top: 10,
     right: 10,
     zIndex: 2,
     padding: 10,
-  },
+  } as ViewStyle,
   gameArea: {
     flex: 1,
     position: 'relative',
     backgroundColor: '#e8f4f8',
     marginBottom: 20,
-  },
+  } as ViewStyle,
   questionArea: {
     backgroundColor: 'white',
     padding: 20,
@@ -1165,47 +1338,186 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.25,
     shadowRadius: 3.84,
   },
-  questionText: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 20,
-    textAlign: 'center',
+  framesContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    padding: 10,
+    height: '100%',
   },
-  answerArea: {
+  frame: {
+    width: '30%',
+    height: '100%',
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: 15,
+    padding: 15,
+    borderWidth: 2,
+    borderColor: '#4a90e2',
+    justifyContent: 'flex-start',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+  frameContent: {
+    width: '100%',
+    height: '100%',
+    justifyContent: 'flex-start',
+    alignItems: 'center',
+    paddingTop: 10,
+  },
+  frameText: {
+    fontSize: 16,
+    textAlign: 'center',
+    color: '#333',
+  },
+  bugPreview: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    fontSize: 40,
+  },
+  slotsContainer: {
     flexDirection: 'row',
     justifyContent: 'center',
     flexWrap: 'wrap',
-    padding: 10,
-    minHeight: 200,
-    position: 'relative',
-  },
-  letterCard: {
-    width: 60,
-    height: 60,
-    backgroundColor: '#4a90e2',
-    borderRadius: 10,
+    width: '100%',
+    paddingHorizontal: 5,
+    marginTop: 5,
+  } as ViewStyle,
+  letterSlot: {
+    width: 80,
+    height: 80,
+    borderWidth: 3,
+    borderColor: '#4a90e2',
+    borderRadius: 16,
+    margin: 6,
     justifyContent: 'center',
     alignItems: 'center',
-    margin: 5,
+    backgroundColor: 'rgba(74, 144, 226, 0.1)',
+  } as ViewStyle,
+  filledSlot: {
+    backgroundColor: '#4a90e2',
+    borderColor: '#4a90e2',
+  } as ViewStyle,
+  letterSlotText: {
+    color: 'white',
+    fontSize: 48,
+    fontWeight: 'bold',
+  },
+  availableLettersContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    padding: 5,
+    marginTop: 10,
+    width: '100%',
+    minHeight: 60,
+    backgroundColor: 'rgba(255, 255, 255, 0.8)',
+    borderRadius: 10,
+  } as ViewStyle,
+  availableLetter: {
+    width: 70,
+    height: 70,
+    backgroundColor: '#4a90e2',
+    borderRadius: 16,
+    margin: 6,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2.84,
+    elevation: 3,
+  } as ViewStyle,
+  availableLetterText: {
+    color: 'white',
+    fontSize: 40,
+    fontWeight: 'bold',
+  },
+  frameSmall: {
+    padding: 5,
+    borderWidth: 1,
+  },
+  bugPreviewSmall: {
+    fontSize: 20,
+  },
+  letterSlotSmall: {
+    width: 50,
+    height: 50,
+    margin: 4,
+  } as ViewStyle,
+  letterSlotTextSmall: {
+    fontSize: 32,
+  },
+  availableLetterSmall: {
+    width: 50,
+    height: 50,
+    margin: 4,
+  } as ViewStyle,
+  availableLetterTextSmall: {
+    fontSize: 28,
+  },
+  frameTextSmall: {
+    fontSize: 12,
+  },
+  levelUpContainer: {
+    position: 'absolute',
+    top: '50%',
+    left: '50%',
+    transform: [{ translateX: -100 }, { translateY: -50 }],
+    backgroundColor: 'rgba(74, 144, 226, 0.9)',
+    padding: 20,
+    borderRadius: 10,
     elevation: 5,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
     shadowRadius: 3.84,
-  },
-  letterCardText: {
+  } as ViewStyle,
+  levelUpText: {
+    color: 'white',
+    fontSize: 32,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    textShadowColor: 'rgba(0, 0, 0, 0.5)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 2,
+  } as TextStyle,
+  comboContainer: {
+    position: 'absolute',
+    top: 100,
+    left: '50%',
+    transform: [{ translateX: -50 }],
+    backgroundColor: 'rgba(226, 132, 74, 0.9)',
+    padding: 15,
+    borderRadius: 25,
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    zIndex: 1000,
+  } as ViewStyle,
+  comboText: {
     color: 'white',
     fontSize: 24,
     fontWeight: 'bold',
-  },
-  selectedLetterCard: {
-    backgroundColor: '#2c5282',
-  },
-  scoreText: {
-    fontSize: isSmallScreen ? 16 : 20,
     textAlign: 'center',
-    marginTop: 10,
+    textShadowColor: 'rgba(0, 0, 0, 0.5)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 2,
+  } as TextStyle,
+  particle: {
+    position: 'absolute',
+    borderRadius: 50,
+  },
+  particleEmoji: {
+    fontSize: 30,
+  },
+  enemyEmoji: {
+    fontSize: 70,
   },
   bug: {
     position: 'absolute',
@@ -1248,57 +1560,6 @@ const styles = StyleSheet.create({
     marginBottom: 5,
     color: '#4a90e2',
   },
-  comboText: {
-    color: 'white',
-    fontSize: 24,
-    fontWeight: 'bold',
-    textAlign: 'center',
-  },
-  levelUpContainer: {
-    position: 'absolute',
-    top: '50%',
-    left: '50%',
-    transform: [{ translateX: -100 }, { translateY: -50 }],
-    backgroundColor: 'rgba(74, 144, 226, 0.9)',
-    padding: 20,
-    borderRadius: 10,
-    elevation: 5,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-  },
-  levelUpText: {
-    color: 'white',
-    fontSize: 32,
-    fontWeight: 'bold',
-    textAlign: 'center',
-  },
-  comboContainer: {
-    position: 'absolute',
-    top: 100,
-    left: '50%',
-    transform: [{ translateX: -50 }],
-    backgroundColor: 'rgba(226, 132, 74, 0.9)',
-    padding: 15,
-    borderRadius: 25,
-    elevation: 5,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    zIndex: 1000,
-  },
-  particle: {
-    position: 'absolute',
-    borderRadius: 50,
-  },
-  particleEmoji: {
-    fontSize: 30,
-  },
-  enemyEmoji: {
-    fontSize: 70,
-  },
   confirmButton: {
     position: 'absolute',
     right: 20,
@@ -1318,79 +1579,6 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
   },
-  framesContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    padding: 10,
-    height: '100%',
-  },
-  frame: {
-    width: '30%',
-    height: '100%',
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    borderRadius: 15,
-    padding: 15,
-    borderWidth: 2,
-    borderColor: '#4a90e2',
-    justifyContent: 'flex-start',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    elevation: 5,
-  },
-  frameContent: {
-    width: '100%',
-    height: '100%',
-    justifyContent: 'flex-start',
-    alignItems: 'center',
-    paddingTop: 20,
-  },
-  frameText: {
-    fontSize: 16,
-    textAlign: 'center',
-    color: '#333',
-  },
-  bugPreview: {
-    position: 'absolute',
-    top: 10,
-    right: 10,
-    fontSize: 40,
-  },
-  slotsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    flexWrap: 'wrap',
-    width: '100%',
-    paddingHorizontal: 5,
-    marginTop: 10,
-  },
-  letterSlot: {
-    width: 40,
-    height: 40,
-    borderWidth: 2,
-    borderColor: '#4a90e2',
-    borderRadius: 8,
-    margin: 3,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'rgba(74, 144, 226, 0.1)',
-  },
-  filledSlot: {
-    backgroundColor: '#4a90e2',
-  },
-  letterSlotText: {
-    color: 'white',
-    fontSize: 24,
-    fontWeight: 'bold',
-  },
-  cardsContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'center',
-    padding: 10,
-  },
   battleResultContainer: {
     position: 'absolute',
     top: '20%',
@@ -1407,48 +1595,17 @@ const styles = StyleSheet.create({
     textShadowOffset: { width: 1, height: 1 },
     textShadowRadius: 2,
   },
-  availableLettersContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'center',
-    padding: 10,
-    marginTop: 20,
-    width: '100%',
-    minHeight: 60,
-    backgroundColor: 'rgba(255, 255, 255, 0.8)',
-    borderRadius: 10,
-  },
-  availableLetter: {
-    width: 35,
-    height: 35,
-    backgroundColor: '#4a90e2',
-    borderRadius: 8,
-    margin: 3,
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.2,
-    shadowRadius: 1.41,
-    elevation: 2,
-  },
-  availableLetterText: {
-    color: 'white',
-    fontSize: 20,
-    fontWeight: 'bold',
-  },
   abilityButton: {
     position: 'absolute',
-    bottom: 20,
-    right: 20,
-    backgroundColor: '#4a90e2',
-    padding: 15,
+    padding: 12,
     borderRadius: 25,
     elevation: 5,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
     shadowRadius: 3.84,
+    minWidth: 100,
+    alignItems: 'center',
   },
   abilityButtonText: {
     color: 'white',
@@ -1471,4 +1628,66 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: 'bold',
   },
+  gameHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    borderRadius: 10,
+    margin: 10,
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+  } as ViewStyle,
+  levelContainer: {
+    flex: 1,
+  },
+  progressBarContainer: {
+    height: 5,
+    backgroundColor: '#e0e0e0',
+    borderRadius: 3,
+    marginTop: 5,
+  },
+  progressBar: {
+    height: '100%',
+    backgroundColor: '#4a90e2',
+    borderRadius: 3,
+  },
+  scoreContainer: {
+    alignItems: 'center',
+  },
+  scoreAnimation: {
+    position: 'absolute',
+    color: '#4CAF50',
+    fontSize: 20,
+    fontWeight: 'bold',
+  },
+  startScreen: {} as ViewStyle,
+  gameTitle: {} as TextStyle,
+  gameDescription: {} as TextStyle,
+  startButtonContainer: {} as ViewStyle,
+  startButton: {} as ViewStyle,
+  startButtonText: {} as TextStyle,
+  scoreDisplay: {
+    position: 'absolute',
+    top: 10,
+    right: 50,
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    padding: 10,
+    borderRadius: 20,
+    zIndex: 2,
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+  } as ViewStyle,
+  scoreText: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#333',
+  } as TextStyle,
 }); 

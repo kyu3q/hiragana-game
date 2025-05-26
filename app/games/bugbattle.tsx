@@ -3,6 +3,8 @@ import { Audio } from 'expo-av';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import { Animated, Dimensions, Easing, Platform, StyleSheet, Text, TextStyle, TouchableOpacity, View, ViewStyle } from 'react-native';
+import BugCastleIcon from '../../assets/images/BugCastleIcon';
+import EnemyCastleIcon from '../../assets/images/EnemyCastleIcon';
 import { level1Words, level2Words, level3Words, level4Words, level5Words } from '../../constants/games/wordLists';
 import GameLayout from '../components/GameLayout';
 import GameMenu from '../components/GameMenu';
@@ -197,6 +199,9 @@ const BUG_COLORS = {
   firefly: '#4a90e2',
 } as const;
 
+// タワーの幅を定数で定義
+const TOWER_WIDTH = 120;
+
 export default function BugBattle() {
   const router = useRouter();
   const [bugs, setBugs] = useState<Bug[]>([]);
@@ -273,6 +278,12 @@ export default function BugBattle() {
     x: screenWidth - 50,
     y: screenHeight - 400,
   });
+
+  // タワーのアニメーション用stateを追加
+  const [playerTowerShake] = useState(new Animated.Value(0));
+  const [enemyTowerShake] = useState(new Animated.Value(0));
+  const [playerTowerHit, setPlayerTowerHit] = useState(false);
+  const [enemyTowerHit, setEnemyTowerHit] = useState(false);
 
   const createParticles = (x: number, y: number, color: string, count: number = 10, type: 'success' | 'failure' = 'success') => {
     const newParticles: Particle[] = Array.from({ length: count }, () => ({
@@ -627,9 +638,9 @@ export default function BugBattle() {
     const currentEnemies = enemiesRef.current;
     
     currentBugs.forEach(bug => {
-      // 敵のタワーとの衝突判定
-      if (bug.x >= enemyTower.x - 50) {
-        updateTowerHp(false, 10);
+      // 味方のタワーとの衝突判定
+      if (bug.x <= 40 + TOWER_WIDTH) { // 左タワーの右端
+        updateTowerHp(true, 10);
         animateBugDisappearance(bug);
         return;
       }
@@ -663,11 +674,12 @@ export default function BugBattle() {
       });
     });
 
-    // 味方のタワーとの衝突判定
     currentEnemies.forEach(enemy => {
-      if (enemy.x <= playerTower.x + 50) {
-        updateTowerHp(true, 10);
+      // 敵のタワーとの衝突判定
+      if (enemy.x >= screenWidth - 40 - TOWER_WIDTH) { // 右タワーの左端
+        updateTowerHp(false, 10);
         animateEnemyDisappearance(enemy);
+        return;
       }
     });
   };
@@ -1111,6 +1123,28 @@ export default function BugBattle() {
         hp: Math.max(0, prev.hp - damage)
       }));
     }
+    animateTowerHit(isPlayer);
+  };
+
+  // タワー攻撃時のアニメーション関数
+  const animateTowerHit = (isPlayer: boolean) => {
+    if (isPlayer) {
+      setPlayerTowerHit(true);
+      Animated.sequence([
+        Animated.timing(playerTowerShake, { toValue: 10, duration: 50, useNativeDriver: true }),
+        Animated.timing(playerTowerShake, { toValue: -10, duration: 50, useNativeDriver: true }),
+        Animated.timing(playerTowerShake, { toValue: 6, duration: 50, useNativeDriver: true }),
+        Animated.timing(playerTowerShake, { toValue: 0, duration: 50, useNativeDriver: true }),
+      ]).start(() => setTimeout(() => setPlayerTowerHit(false), 150));
+    } else {
+      setEnemyTowerHit(true);
+      Animated.sequence([
+        Animated.timing(enemyTowerShake, { toValue: 10, duration: 50, useNativeDriver: true }),
+        Animated.timing(enemyTowerShake, { toValue: -10, duration: 50, useNativeDriver: true }),
+        Animated.timing(enemyTowerShake, { toValue: 6, duration: 50, useNativeDriver: true }),
+        Animated.timing(enemyTowerShake, { toValue: 0, duration: 50, useNativeDriver: true }),
+      ]).start(() => setTimeout(() => setEnemyTowerHit(false), 150));
+    }
   };
 
   return (
@@ -1139,11 +1173,17 @@ export default function BugBattle() {
 
           <View style={styles.gameArea}>
             <View style={styles.battleArea}>
-              {/* 味方のタワー */}
-              <View style={[styles.tower, { left: 50, top: 40 }]}>
-                <View style={styles.towerEmojiContainer}>
-                  <Text style={styles.towerEmoji}>🏰</Text>
-                </View>
+              {/* 敵のタワー（左側） */}
+              <View style={[styles.tower, { left: 40, top: 80 }]}>
+                <Animated.View style={{
+                  transform: [{ translateX: playerTowerShake }],
+                  backgroundColor: playerTowerHit ? '#ffcccc' : 'transparent',
+                  borderRadius: 20,
+                }}>
+                  <View style={styles.towerEmojiContainer}>
+                    <EnemyCastleIcon width={120} height={280} />
+                  </View>
+                </Animated.View>
                 <View style={styles.hpBarContainer}>
                   <View 
                     style={[
@@ -1157,11 +1197,17 @@ export default function BugBattle() {
                 </View>
               </View>
 
-              {/* 敵のタワー */}
-              <View style={[styles.tower, { right: 50, top: 40 }]}>
-                <View style={styles.towerEmojiContainer}>
-                  <Text style={styles.towerEmoji}>🏰</Text>
-                </View>
+              {/* 味方のタワー（右側） */}
+              <View style={[styles.tower, { right: 40, top: 80 }]}>
+                <Animated.View style={{
+                  transform: [{ translateX: enemyTowerShake }],
+                  backgroundColor: enemyTowerHit ? '#ffcccc' : 'transparent',
+                  borderRadius: 20,
+                }}>
+                  <View style={styles.towerEmojiContainer}>
+                    <BugCastleIcon width={120} height={280} />
+                  </View>
+                </Animated.View>
                 <View style={styles.hpBarContainer}>
                   <View 
                     style={[

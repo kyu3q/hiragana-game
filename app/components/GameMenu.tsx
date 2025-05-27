@@ -1,23 +1,30 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useRef } from 'react';
-import { Animated, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Animated, Dimensions, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
-type GameMenuProps = {
+// 画面サイズの取得
+const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
+// iPadの画面サイズを考慮して、画面の向きに関係なく判定
+const isSmallScreen = Math.min(screenWidth, screenHeight) < 768; // 768ptを基準に
+
+// ゲーム一覧
+const GAMES = [
+  { id: 'shiritori', name: '親子しりとり' },
+  { id: 'memory', name: 'めもりー対決' },
+  { id: 'bugbattle', name: '昆虫バトル' },
+] as const;
+
+type GameType = typeof GAMES[number]['id'];
+
+interface GameMenuProps {
   visible: boolean;
   onClose: () => void;
   onRetry: () => void;
   onSwitchKana: () => void;
   isHiragana: boolean;
-  currentGame: string;
-};
-
-// ゲーム一覧
-const GAMES = [
-  { id: 'shiritori', name: '親子しりとり' },
-  { id: 'memory', name: 'めもりー対決！' },
-  { id: 'bugbattle', name: '昆虫バトル' },
-] as const;
+  currentGame: GameType;
+}
 
 export default function GameMenu({
   visible,
@@ -46,14 +53,18 @@ export default function GameMenu({
     }
   }, [visible]);
 
-  // ゲーム切替処理
   const handleSwitchGame = () => {
-    // 現在のゲーム以外のゲームを取得
     const availableGames = GAMES.filter(game => game.id !== currentGame);
-    // ランダムに1つ選択
-    const nextGame = availableGames[Math.floor(Math.random() * availableGames.length)];
-    // 選択したゲームに遷移
-    router.push(`/games/${nextGame.id}`);
+    const randomGame = availableGames[Math.floor(Math.random() * availableGames.length)];
+    router.push(`/games/${randomGame.id}`);
+    onClose();
+  };
+
+  const handleGameSelect = (gameId: GameType) => {
+    if (gameId !== currentGame) {
+      router.push(`/games/${gameId}`);
+      onClose();
+    }
   };
 
   if (!visible) return null;
@@ -107,6 +118,26 @@ export default function GameMenu({
               {isHiragana ? 'カタカナに切替' : 'ひらがなに切替'}
             </Text>
           </TouchableOpacity>
+          <View style={styles.gameButtonsContainer}>
+            {GAMES.map((game) => (
+              <TouchableOpacity
+                key={game.id}
+                style={[
+                  game.id === currentGame ? styles.currentGameButton : styles.gameButton,
+                ]}
+                onPress={() => handleGameSelect(game.id)}
+                disabled={game.id === currentGame}
+              >
+                <Text
+                  style={[
+                    game.id === currentGame ? styles.currentGameButtonText : styles.gameButtonText,
+                  ]}
+                >
+                  {game.name}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
         </View>
       </Animated.View>
     </View>
@@ -152,5 +183,37 @@ const styles = StyleSheet.create({
     marginLeft: 15,
     fontSize: 16,
     color: '#333',
+  },
+  gameButtonsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: 10,
+    paddingHorizontal: isSmallScreen ? 10 : 20,
+  },
+  gameButton: {
+    backgroundColor: '#e0e0e0',
+    paddingVertical: 8,
+    paddingHorizontal: isSmallScreen ? 12 : 16,
+    borderRadius: 20,
+    minWidth: isSmallScreen ? 80 : 100,
+  },
+  currentGameButton: {
+    backgroundColor: '#4a90e2',
+    paddingVertical: 8,
+    paddingHorizontal: isSmallScreen ? 12 : 16,
+    borderRadius: 20,
+    minWidth: isSmallScreen ? 80 : 100,
+  },
+  gameButtonText: {
+    color: '#333',
+    fontSize: isSmallScreen ? 12 : 14,
+    textAlign: 'center',
+  },
+  currentGameButtonText: {
+    color: '#fff',
+    fontSize: isSmallScreen ? 12 : 14,
+    textAlign: 'center',
   },
 }); 

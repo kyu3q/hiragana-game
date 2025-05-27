@@ -2,9 +2,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { Audio } from 'expo-av';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
-import { Animated, Dimensions, Easing, Platform, StyleSheet, Text, TextStyle, TouchableOpacity, View, ViewStyle } from 'react-native';
-import BugCastleIcon from '../../assets/images/BugCastleIcon';
-import EnemyCastleIcon from '../../assets/images/EnemyCastleIcon';
+import { Animated, Dimensions, Easing, Image, ImageStyle, Platform, StyleSheet, Text, TextStyle, TouchableOpacity, View, ViewStyle } from 'react-native';
+import BugCastleIcon from '../../assets/images/bugbattle/BugCastleIcon';
+import EnemyCastleIcon from '../../assets/images/bugbattle/EnemyCastleIcon';
 import {
   katakanaLevel1Words,
   katakanaLevel2Words,
@@ -24,41 +24,47 @@ import GameMenu from '../components/GameMenu';
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 const isSmallScreen = screenWidth < 768;
 
-// 虫の種類
-type BugType = 'ladybug' | 'wasp' | 'butterfly' | 'firefly';
+// 敵の絵文字マッピング
+const ENEMY_EMOJIS = {
+  beetle: '🪲',
+  stag: '🦗',
+  mantis: '🦗',
+} as const;
 
-// 虫の絵文字マッピング
-const BUG_EMOJIS = {
-  ladybug: '🐞', // テントウムシ
-  wasp: '🐝', // ハチ
-  butterfly: '🦋', // チョウ
-  firefly: '✨', // ホタル
+// 虫の画像マッピング
+const BUG_IMAGES = {
+  kabuto: require('../../assets/images/bugbattle/bug1.png'),      // カブトムシ
+  kuwagata: require('../../assets/images/bugbattle/bug2.png'),    // クワガタ
+  gohon: require('../../assets/images/bugbattle/bug3.png'),       // ゴホンヅノカブト
+  caucasus: require('../../assets/images/bugbattle/bug4.png'),    // コーカサスオオカブト
+} as const;
+
+// 敵の画像マッピング
+const ENEMY_IMAGES = {
+  beetle: require('../../assets/images/bugbattle/enemy1.png'),
+  stag: require('../../assets/images/bugbattle/enemy2.png'),
+  mantis: require('../../assets/images/bugbattle/enemy3.png'),
 } as const;
 
 // 虫のサイズ定数
 const BUG_SIZES = {
-  ladybug: 40, // テントウムシの半径
-  wasp: 35,    // ハチの半径
-  butterfly: 45, // チョウの半径
-  dragonfly: 50, // トンボの半径
-  firefly: 35,  // ホタルの半径
+  kabuto: 100,     // カブトムシのサイズ
+  kuwagata: 100,   // クワガタのサイズ
+  gohon: 100,      // ゴホンヅノカブトのサイズ
+  caucasus: 100,   // コーカサスオオカブトのサイズ
 } as const;
-
-// 敵の種類と絵文字のマッピング
-const ENEMY_EMOJIS = {
-  beetle: '🍊', // カブトムシ
-  stag: '🍎', // クワガタ
-  mantis: '🍏', // カマキリ
-} as const;
-
-type EnemyType = keyof typeof ENEMY_EMOJIS;
 
 // 敵のサイズ定数
 const ENEMY_SIZES = {
-  beetle: 45,    // カブトムシの半径
-  stag: 40,      // クワガタの半径
-  mantis: 35,    // カマキリの半径
+  beetle: 90,    // カブトムシのサイズ
+  stag: 80,      // クワガタのサイズ
+  mantis: 70,    // カマキリのサイズ
 } as const;
+
+// 虫の種類
+type BugType = 'kabuto' | 'kuwagata' | 'gohon' | 'caucasus';
+// 敵の種類
+type EnemyType = keyof typeof ENEMY_IMAGES;
 
 // 虫の特殊能力
 interface BugAbility {
@@ -88,6 +94,7 @@ interface Bug {
   baseDefense: number;
   isDefenseBoosted: boolean;
   defenseBoostTimer: number | null;
+  attack: number; // 攻撃力を追加
 }
 
 // 敵の状態
@@ -104,6 +111,7 @@ interface Enemy {
   hp: number;
   maxHp: number;
   attack: number;
+  defense: number; // 防御力を追加
   isPoisoned: boolean;
   poisonTimer: number | null;
   poisonDamage: number;
@@ -123,6 +131,8 @@ interface Frame {
   question: string | null;
   letters: string[];
   slots: (string | null)[];
+  cooldown: number; // クールダウン時間（ミリ秒）
+  lastUsed: number; // 最後に使用した時間
 }
 
 // 難易度設定
@@ -194,17 +204,18 @@ const generateSingleQuestion = (usedIndices: number[], currentWordList: string[]
 
 // 枠と虫の種類のマッピング
 const FRAME_BUG_TYPES: Record<number, BugType> = {
-  1: 'ladybug',  // 1番目の枠はテントウムシ
-  2: 'wasp',     // 2番目の枠はハチ
-  3: 'butterfly', // 3番目の枠はチョウ
+  1: 'kabuto',     // 1番目の枠はカブトムシ
+  2: 'kuwagata',   // 2番目の枠はクワガタ
+  3: 'gohon',      // 3番目の枠はゴホンヅノカブト
+  4: 'caucasus',   // 4番目の枠はコーカサスオオカブト
 };
 
-// 虫の色の定義を追加
+// 虫の色の定義を更新
 const BUG_COLORS = {
-  ladybug: '#e74c3c',
-  wasp: '#f1c40f',
-  butterfly: '#9b59b6',
-  firefly: '#4a90e2',
+  kabuto: '#8B4513',     // 茶色系
+  kuwagata: '#4169E1',   // ロイヤルブルー
+  gohon: '#CD853F',      // ペルー
+  caucasus: '#006400',   // ダークレッド
 } as const;
 
 // タワーの幅を定数で定義
@@ -239,6 +250,8 @@ export default function BugBattle() {
   const [selectedLetters, setSelectedLetters] = useState<string[]>([]);
   const [availableLetters, setAvailableLetters] = useState<string[]>([]);
   const gameLoopRef = useRef<NodeJS.Timeout | null>(null);
+  const enemySpawnIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const [currentLevel, setCurrentLevel] = useState(1);
   const [consecutiveCorrect, setConsecutiveCorrect] = useState(0);
   const [gameTime, setGameTime] = useState(0);
@@ -265,13 +278,18 @@ export default function BugBattle() {
     message: '',
   });
   const [frames, setFrames] = useState<Frame[]>([
-    { id: 1, question: null, letters: [], slots: [] },
-    { id: 2, question: null, letters: [], slots: [] },
-    { id: 3, question: null, letters: [], slots: [] },
+    { id: 1, question: null, letters: [], slots: [], cooldown: 0, lastUsed: 0 },
+    { id: 2, question: null, letters: [], slots: [], cooldown: 0, lastUsed: 0 },
+    { id: 3, question: null, letters: [], slots: [], cooldown: 5000, lastUsed: 0 }, // 5秒クールダウン
+    { id: 4, question: null, letters: [], slots: [], cooldown: 7000, lastUsed: 0 }, // 7秒クールダウン
   ]);
   const [progressToNextLevel, setProgressToNextLevel] = useState(0);
   const [showScoreAnimation, setShowScoreAnimation] = useState(false);
   const [scoreAnimationValue] = useState(new Animated.Value(1));
+  const [cooldownProgress, setCooldownProgress] = useState<{[key: number]: number}>({
+    3: 100,
+    4: 100
+  });
 
   // 連番ID生成用ref
   const bugIdRef = useRef(0);
@@ -279,25 +297,37 @@ export default function BugBattle() {
   const particleIdRef = useRef<number>(0);
 
   // 音声の読み込み
-  const [sounds, setSounds] = useState<{
+  const soundsRef = useRef<{
     bugSpawn: Audio.Sound | null;
     enemySpawn: Audio.Sound | null;
     collision: Audio.Sound | null;
+    playerTowerHit: Audio.Sound | null;
+    enemyTowerHit: Audio.Sound | null;
+    abilityLadybug: Audio.Sound | null;
+    abilityWasp: Audio.Sound | null;
+    abilityButterfly: Audio.Sound | null;
+    abilityFirefly: Audio.Sound | null;
   }>({
     bugSpawn: null,
     enemySpawn: null,
     collision: null,
+    playerTowerHit: null,
+    enemyTowerHit: null,
+    abilityLadybug: null,
+    abilityWasp: null,
+    abilityButterfly: null,
+    abilityFirefly: null,
   });
 
   const [playerTower, setPlayerTower] = useState<Tower>({
-    hp: 1000,
-    maxHp: 1000,
+    hp: 100,
+    maxHp: 100,
     x: -100,
     y: screenHeight - 400,
   });
   const [enemyTower, setEnemyTower] = useState<Tower>({
-    hp: 1000,
-    maxHp: 1000,
+    hp: 100,
+    maxHp: 100,
     x: screenWidth - 50,
     y: screenHeight - 400,
   });
@@ -307,6 +337,48 @@ export default function BugBattle() {
   const [enemyTowerShake] = useState(new Animated.Value(0));
   const [playerTowerHit, setPlayerTowerHit] = useState(false);
   const [enemyTowerHit, setEnemyTowerHit] = useState(false);
+
+  // ゲームオーバー状態
+  const [isGameOverScreen, setIsGameOverScreen] = useState(false);
+  // ゲームクリア状態
+  const [isGameClearScreen, setIsGameClearScreen] = useState(false);
+  const bounceAnim = useRef(new Animated.Value(0)).current;
+  const textBounceAnim = useRef(new Animated.Value(0)).current;
+
+  // 結果画面のアニメーション
+  useEffect(() => {
+    if (isGameOverScreen || isGameClearScreen) {
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(bounceAnim, {
+            toValue: 1,
+            duration: 500,
+            useNativeDriver: true,
+          }),
+          Animated.timing(bounceAnim, {
+            toValue: 0,
+            duration: 500,
+            useNativeDriver: true,
+          }),
+        ])
+      ).start();
+
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(textBounceAnim, {
+            toValue: 1,
+            duration: 250,
+            useNativeDriver: true,
+          }),
+          Animated.timing(textBounceAnim, {
+            toValue: 0,
+            duration: 250,
+            useNativeDriver: true,
+          }),
+        ])
+      ).start();
+    }
+  }, [isGameOverScreen, isGameClearScreen]);
 
   const createParticles = (x: number, y: number, color: string, count: number = 10, type: 'success' | 'failure' = 'success') => {
     const newParticles: Particle[] = Array.from({ length: count }, () => ({
@@ -356,25 +428,42 @@ export default function BugBattle() {
     });
   };
 
-  // 音声の初期化
+  // 音声の初期化を改善
   useEffect(() => {
     const loadSounds = async () => {
       try {
         const bugSpawnSound = new Audio.Sound();
         const enemySpawnSound = new Audio.Sound();
         const collisionSound = new Audio.Sound();
+        const playerTowerHitSound = new Audio.Sound();
+        const enemyTowerHitSound = new Audio.Sound();
+        const abilityLadybugSound = new Audio.Sound();
+        const abilityWaspSound = new Audio.Sound();
+        const abilityButterflySound = new Audio.Sound();
+        const abilityFireflySound = new Audio.Sound();
 
-        await Promise.all([
-          bugSpawnSound.loadAsync(require('../../assets/sounds/bugbattle/bug_spawn.mp3')),
-          enemySpawnSound.loadAsync(require('../../assets/sounds/bugbattle/enemy_spawn.mp3')),
-          collisionSound.loadAsync(require('../../assets/sounds/bugbattle/collision.mp3')),
-        ]);
+        // 音声の読み込みを順番に実行
+        await bugSpawnSound.loadAsync(require('../../assets/sounds/bugbattle/bug_spawn.mp3'));
+        await enemySpawnSound.loadAsync(require('../../assets/sounds/bugbattle/enemy_spawn.mp3'));
+        await collisionSound.loadAsync(require('../../assets/sounds/bugbattle/collision.mp3'));
+        await playerTowerHitSound.loadAsync(require('../../assets/sounds/bugbattle/player_tower_hit.mp3'));
+        await enemyTowerHitSound.loadAsync(require('../../assets/sounds/bugbattle/enemy_tower_hit.mp3'));
+        await abilityLadybugSound.loadAsync(require('../../assets/sounds/bugbattle/ability_ladybug_defense.mp3'));
+        await abilityWaspSound.loadAsync(require('../../assets/sounds/bugbattle/ability_wasp_poison.mp3'));
+        await abilityButterflySound.loadAsync(require('../../assets/sounds/bugbattle/ability_butterfly_heal..mp3'));
+        await abilityFireflySound.loadAsync(require('../../assets/sounds/bugbattle/ability_firefly_barrier.mp3'));
 
-        setSounds({
+        soundsRef.current = {
           bugSpawn: bugSpawnSound,
           enemySpawn: enemySpawnSound,
           collision: collisionSound,
-        });
+          playerTowerHit: playerTowerHitSound,
+          enemyTowerHit: enemyTowerHitSound,
+          abilityLadybug: abilityLadybugSound,
+          abilityWasp: abilityWaspSound,
+          abilityButterfly: abilityButterflySound,
+          abilityFirefly: abilityFireflySound,
+        };
       } catch (error) {
         console.error('音声の読み込みに失敗しました:', error);
       }
@@ -382,19 +471,24 @@ export default function BugBattle() {
 
     loadSounds();
 
-    // クリーンアップ
+    // クリーンアップ関数を改善
     return () => {
       const cleanup = async () => {
         try {
-          // すべての音声を停止
-          await Promise.all(
-            Object.values(sounds).map(async (sound) => {
-              if (sound) {
-                await sound.stopAsync();
-                await sound.unloadAsync();
+          const sounds = Object.values(soundsRef.current);
+          await Promise.all(sounds.map(async (sound) => {
+            if (sound) {
+              try {
+                const status = await sound.getStatusAsync();
+                if (status.isLoaded) {
+                  await sound.stopAsync();
+                  await sound.unloadAsync();
+                }
+              } catch (error) {
+                console.error('音声のクリーンアップに失敗しました:', error);
               }
-            })
-          );
+            }
+          }));
         } catch (error) {
           console.error('音声のクリーンアップに失敗しました:', error);
         }
@@ -403,13 +497,23 @@ export default function BugBattle() {
     };
   }, []);
 
-  // 音声再生関数
+  // 音声再生関数を改善
   const playSound = async (sound: Audio.Sound | null) => {
     try {
-      if (sound) {
-        await sound.setPositionAsync(0);
-        await sound.playAsync();
+      if (!sound) return;
+      const status = await sound.getStatusAsync();
+      if (!status.isLoaded) return;
+
+      // 再生中の場合は停止してから再生
+      if (status.isPlaying) {
+        await sound.stopAsync();
       }
+
+      // 位置をリセット
+      await sound.setPositionAsync(0);
+      
+      // 再生を開始
+      await sound.playAsync();
     } catch (error) {
       console.error('音声の再生に失敗しました:', error);
     }
@@ -504,48 +608,109 @@ export default function BugBattle() {
     setGameTime(0);
     generateQuestion();
     
-    // 初期の味方を生成（少し遅延させて確実に生成されるようにする）
+    // 初期の味方を生成（状態リセット後に呼ぶ）
     setTimeout(() => {
-      console.log('初期の味方を生成します');
       spawnBug(FRAME_BUG_TYPES[1]);
     }, 100);
+    setPlayerTower({ hp: 100, maxHp: 100, x: -100, y: screenHeight - 400 });
+    setEnemyTower({ hp: 100, maxHp: 100, x: screenWidth - 50, y: screenHeight - 400 });
+    setIsGameOverScreen(false);
+    setIsGameClearScreen(false);
+    setGameTime(0);
+    startGameLoop();
   };
 
   // 問題の生成
   const generateQuestion = () => {
     const usedIndices: number[] = [];
     const newFrames = frames.map((frame) => {
-      const { question, letters, slots, usedIndex } = generateSingleQuestion(usedIndices, getWordLists(isHiragana)[1]);
-      usedIndices.push(usedIndex);
-      return {
-        ...frame,
-        question,
-        letters,
-        slots,
-      };
+      if (frame.id <= 2) {
+        // 1番目と2番目の枠のみクイズを生成
+        const { question, letters, slots, usedIndex } = generateSingleQuestion(usedIndices, getWordLists(isHiragana)[1]);
+        usedIndices.push(usedIndex);
+        return {
+          ...frame,
+          question,
+          letters,
+          slots,
+        };
+      }
+      // 3番目と4番目はクイズなし
+      return frame;
     });
     setFrames(newFrames);
   };
 
+  // 敵の生成
+  const spawnEnemy = async () => {
+    if (isGameOverScreen || isGameClearScreen) return;
+    const difficulty = getCurrentDifficulty();
+    const currentEnemyCount = enemiesRef.current.length;
+    const maxEnemies = 5;
+
+    if (currentEnemyCount >= maxEnemies) {
+      console.log('最大敵数に達しているため、新しい敵は生成しません');
+      return;
+    }
+
+    if (Math.random() > difficulty.enemySpawnRate * 0.7) {
+      console.log('敵の生成をスキップしました');
+      return;
+    }
+
+    // 音声を先に再生
+    await playSound(soundsRef.current.enemySpawn);
+
+    const enemyTypes = Object.keys(ENEMY_EMOJIS) as EnemyType[];
+    const enemyType = enemyTypes[Math.floor(Math.random() * enemyTypes.length)];
+    enemyIdRef.current += 1;
+    const newEnemy: Enemy = {
+      id: enemyIdRef.current,
+      type: enemyType,
+      x: 150,
+      y: 270,
+      targetX: 0,
+      targetY: 0,
+      speed: difficulty.enemySpeed * 1.5,
+      rotation: new Animated.Value(0),
+      scale: new Animated.Value(1),
+      hp: 40,
+      maxHp: 40,
+      attack: 8,
+      defense: 5,
+      isPoisoned: false,
+      poisonTimer: null,
+      poisonDamage: 0,
+    };
+
+    setEnemies(prevEnemies => {
+      const newEnemies = [...prevEnemies, newEnemy];
+      enemiesRef.current = newEnemies;
+      return newEnemies;
+    });
+  };
+
   // ゲームループの開始
   const startGameLoop = () => {
-    if (gameLoopRef.current) {
-      clearInterval(gameLoopRef.current);
-    }
-    console.log('ゲームループを開始します');
+    // 既存のインターバルをクリア
+    if (gameLoopRef.current) clearInterval(gameLoopRef.current);
+    if (enemySpawnIntervalRef.current) clearInterval(enemySpawnIntervalRef.current);
+    if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
+
     gameLoopRef.current = setInterval(async () => {
+      if (isGameOverScreen || isGameClearScreen) return;
       await updateGameState();
     }, 1000 / 60) as unknown as NodeJS.Timeout;
 
-    // 敵の生成用の別のインターバル
-    setInterval(() => {
-      spawnEnemy();
-    }, ENEMY_SPAWN_INTERVAL);
+    enemySpawnIntervalRef.current = setInterval(async () => {
+      if (isGameOverScreen || isGameClearScreen) return;
+      await spawnEnemy();
+    }, ENEMY_SPAWN_INTERVAL) as unknown as NodeJS.Timeout;
 
-    // 時間計測
-    setInterval(() => {
+    timerIntervalRef.current = setInterval(() => {
+      if (isGameOverScreen || isGameClearScreen) return;
       setGameTime(prev => prev + 1);
-    }, 1000);
+    }, 1000) as unknown as NodeJS.Timeout;
   };
 
   // ゲーム状態の更新
@@ -662,10 +827,15 @@ export default function BugBattle() {
 
       currentEnemies.forEach(enemy => {
         if (checkCollision(bug, enemy)) {
-          // 既存の衝突処理
+          // 味方の攻撃
+          const bugDamage = Math.max(1, bug.attack - enemy.defense);
+          enemy.hp -= bugDamage;
+          
+          // 敵の攻撃
+          const enemyDamage = Math.max(1, enemy.attack - bug.defense);
+          bug.hp -= enemyDamage;
+
           playAttackAnimation(enemy.id);
-          const damage = Math.max(1, enemy.attack - bug.defense);
-          bug.hp -= damage;
           createParticles(
             (bug.x + enemy.x) / 2,
             (bug.y + enemy.y) / 2,
@@ -673,7 +843,7 @@ export default function BugBattle() {
             30,
             bug.hp <= 0 ? 'failure' : 'success'
           );
-          playSound(sounds.collision);
+          playSound(soundsRef.current.collision);
           const difficulty = getCurrentDifficulty();
           const penalty = Math.floor(5 * difficulty.scoreMultiplier);
           setScore(prev => Math.max(0, prev - penalty));
@@ -758,84 +928,42 @@ export default function BugBattle() {
 
   // 虫の生成
   const spawnBug = (bugType: BugType) => {
+    if (isGameOverScreen || isGameClearScreen) return;
     console.log('spawnBug関数が呼び出されました');
     const difficulty = getCurrentDifficulty();
     bugIdRef.current += 1;
     const newBug: Bug = {
       id: bugIdRef.current,
       type: bugType,
-      x: screenWidth - 200, // 画面内からスタート
-      y: 250, // タワーの下に表示
+      x: screenWidth - 200,
+      y: 250,
       targetX: 0,
       targetY: 0,
-      speed: difficulty.bugSpeed,
+      speed: difficulty.bugSpeed * 2.0, // 1.2から2.0に変更
       rotation: new Animated.Value(0),
       scale: new Animated.Value(1),
       opacity: new Animated.Value(1),
       ability: BUG_ABILITIES[bugType],
       lastAbilityUse: 0,
-      hp: 100,
-      maxHp: 100,
-      defense: 10,
-      baseDefense: 10,
+      hp: 120,
+      maxHp: 120,
+      defense: 15,
+      baseDefense: 15,
       isDefenseBoosted: false,
       defenseBoostTimer: null,
+      attack: 12,
     };
     setBugs(prevBugs => {
       const newBugs = [...prevBugs, newBug];
       bugsRef.current = newBugs;
       return newBugs;
     });
-    playSound(sounds.bugSpawn);
-  };
-
-  // 敵の生成
-  const spawnEnemy = () => {
-    const difficulty = getCurrentDifficulty();
-    const currentEnemyCount = enemiesRef.current.length;
-    const maxEnemies = 10;
-
-    if (currentEnemyCount >= maxEnemies) {
-      console.log('最大敵数に達しているため、新しい敵は生成しません');
-      return;
-    }
-
-    if (Math.random() > difficulty.enemySpawnRate) {
-      console.log('敵の生成をスキップしました');
-      return;
-    }
-
-    const enemyTypes = Object.keys(ENEMY_EMOJIS) as EnemyType[];
-    const enemyType = enemyTypes[Math.floor(Math.random() * enemyTypes.length)];
-    enemyIdRef.current += 1;
-    const newEnemy: Enemy = {
-      id: enemyIdRef.current,
-      type: enemyType,
-      x: 150,
-      y: 270,
-      targetX: 0,
-      targetY: 0,
-      speed: difficulty.enemySpeed,
-      rotation: new Animated.Value(0),
-      scale: new Animated.Value(1),
-      hp: 50,
-      maxHp: 50,
-      attack: 15,
-      isPoisoned: false,
-      poisonTimer: null,
-      poisonDamage: 0,
-    };
-
-    setEnemies(prevEnemies => {
-      const newEnemies = [...prevEnemies, newEnemy];
-      enemiesRef.current = newEnemies;
-      return newEnemies;
-    });
-    playSound(sounds.enemySpawn);
+    playSound(soundsRef.current.bugSpawn);
   };
 
   // 答えの確認
   const checkAnswer = (frameIndex: number, slots: string[]) => {
+    if (isGameOverScreen || isGameClearScreen) return;
     if (!frames[frameIndex]?.question) return;
     const usedIndices = frames.map(f => {
       if (!f.question) return -1;
@@ -861,13 +989,25 @@ export default function BugBattle() {
         }
         return newCombo;
       });
-      // 該当枠のみ新しい問題に差し替え
-      const { question, letters, slots: newSlots, usedIndex } = generateSingleQuestion(usedIndices, getWordLists(isHiragana)[1]);
-      setFrames(prevFrames => prevFrames.map((frame, idx) =>
-        idx === frameIndex
-          ? { ...frame, question, letters, slots: newSlots }
-          : frame
-      ));
+      
+      // 正解時に味方を生成（ゲーム終了時は生成しない）
+      if (!isGameOverScreen && !isGameClearScreen) {
+        const bugType = FRAME_BUG_TYPES[frameIndex + 1];
+        if (bugType) {
+          spawnBug(bugType);
+        }
+      }
+
+      // 3秒後に新しい問題を生成
+      setTimeout(() => {
+        const { question, letters, slots: newSlots, usedIndex } = generateSingleQuestion(usedIndices, getWordLists(isHiragana)[1]);
+        setFrames(prevFrames => prevFrames.map((frame, idx) =>
+          idx === frameIndex
+            ? { ...frame, question, letters, slots: newSlots }
+            : frame
+        ));
+      }, 3000);
+
       checkLevelUp();
     } else {
       // 不正解の場合
@@ -928,6 +1068,7 @@ export default function BugBattle() {
 
   // 文字カードのクリック処理
   const handleLetterPress = (frameIndex: number, letter: string) => {
+    if (isGameOverScreen || isGameClearScreen) return;
     if (!frames[frameIndex]?.question) return;
     // 空いているスロットを探す
     const emptySlotIndex = frames[frameIndex].slots.findIndex(slot => slot === null);
@@ -954,6 +1095,7 @@ export default function BugBattle() {
 
   // 特殊能力を使用する関数を追加
   const useAbility = (bug: Bug) => {
+    if (isGameOverScreen || isGameClearScreen) return;
     const now = Date.now();
     if (now - bug.lastAbilityUse < bug.ability.cooldown) {
       return;
@@ -969,36 +1111,34 @@ export default function BugBattle() {
 
   // 特殊能力の定義
   const BUG_ABILITIES: Record<BugType, BugAbility> = {
-    ladybug: {
-      name: '防御強化',
-      description: '一時的に防御力が2倍になり、敵の攻撃を軽減します',
+    kabuto: {
+      name: '角の突進',
+      description: '強力な角で敵を突き飛ばし、一時的に動きを鈍らせます',
       cooldown: 10000,
       effect: (bug: Bug, enemies: Enemy[]) => {
-        // 防御力上昇のエフェクト
-        bug.defense = bug.baseDefense * 2;
-        bug.isDefenseBoosted = true;
-        bug.defenseBoostTimer = Date.now() + 5000; // 5秒間効果持続
-
-        Animated.sequence([
-          Animated.timing(bug.scale, {
-            toValue: 1.5,
-            duration: 300,
-            useNativeDriver: Platform.OS !== 'web',
-          }),
-          Animated.timing(bug.scale, {
-            toValue: 1,
-            duration: 300,
-            useNativeDriver: Platform.OS !== 'web',
-          }),
-        ]).start();
-
-        // 防御強化のパーティクルエフェクト
-        createParticles(bug.x, bug.y, '#4a90e2', 20, 'success');
+        // 最も近い敵を探す
+        const nearestEnemy = enemies.reduce((nearest, current) => {
+          const nearestDist = Math.sqrt(
+            Math.pow(nearest.x - bug.x, 2) + Math.pow(nearest.y - bug.y, 2)
+          );
+          const currentDist = Math.sqrt(
+            Math.pow(current.x - bug.x, 2) + Math.pow(current.y - bug.y, 2)
+          );
+          return currentDist < nearestDist ? current : nearest;
+        });
+        if (nearestEnemy) {
+          // 敵の移動速度を50%に減少
+          nearestEnemy.speed *= 0.5;
+          // 突進のパーティクルエフェクト
+          createParticles(nearestEnemy.x, nearestEnemy.y, '#8B4513', 20, 'success');
+          // 突進音
+          playSound(soundsRef.current.abilityLadybug);
+        }
       },
     },
-    wasp: {
-      name: '毒針',
-      description: '最も近い敵に毒ダメージを与えます（5秒間、毎秒10ダメージ）',
+    kuwagata: {
+      name: '大アゴの挟撃',
+      description: '強力な大アゴで敵を挟み、防御力を一時的に下げます',
       cooldown: 15000,
       effect: (bug: Bug, enemies: Enemy[]) => {
         // 最も近い敵を探す
@@ -1011,60 +1151,64 @@ export default function BugBattle() {
           );
           return currentDist < nearestDist ? current : nearest;
         });
-
         if (nearestEnemy) {
-          // 毒状態を付与
-          nearestEnemy.isPoisoned = true;
-          nearestEnemy.poisonTimer = Date.now() + 5000; // 5秒間効果持続
-          nearestEnemy.poisonDamage = 10; // 毎秒10ダメージ
-
-          // 毒のパーティクルエフェクト
-          createParticles(nearestEnemy.x, nearestEnemy.y, '#4CAF50', 20, 'success');
+          // 敵の防御力を50%に減少
+          nearestEnemy.defense *= 0.5;
+          // 挟撃のパーティクルエフェクト
+          createParticles(nearestEnemy.x, nearestEnemy.y, '#2F4F4F', 20, 'success');
+          // 挟撃音
+          playSound(soundsRef.current.abilityWasp);
         }
       },
     },
-    butterfly: {
-      name: '花粉散布',
-      description: '周囲の味方を回復します（HPを30%回復）',
+    gohon: {
+      name: '五本角の突撃',
+      description: '五本の角で敵を貫き、攻撃力を一時的に下げます',
       cooldown: 20000,
       effect: (bug: Bug, enemies: Enemy[]) => {
-        // 周囲の味方を回復
-        setBugs(prevBugs => {
-          return prevBugs.map(b => {
-            const distance = Math.sqrt(
-              Math.pow(b.x - bug.x, 2) + Math.pow(b.y - bug.y, 2)
-            );
-            if (distance < 200) { // 200px以内の味方を回復
-              const healAmount = Math.floor(b.maxHp * 0.3); // 30%回復
-              b.hp = Math.min(b.maxHp, b.hp + healAmount);
-              // 回復のパーティクルエフェクト
-              createParticles(b.x, b.y, '#FFD700', 15, 'success');
-            }
-            return b;
-          });
+        // 最も近い敵を探す
+        const nearestEnemy = enemies.reduce((nearest, current) => {
+          const nearestDist = Math.sqrt(
+            Math.pow(nearest.x - bug.x, 2) + Math.pow(nearest.y - bug.y, 2)
+          );
+          const currentDist = Math.sqrt(
+            Math.pow(current.x - bug.x, 2) + Math.pow(current.y - bug.y, 2)
+          );
+          return currentDist < nearestDist ? current : nearest;
         });
+        if (nearestEnemy) {
+          // 敵の攻撃力を50%に減少
+          nearestEnemy.attack *= 0.5;
+          // 突撃のパーティクルエフェクト
+          createParticles(nearestEnemy.x, nearestEnemy.y, '#CD853F', 20, 'success');
+          // 突撃音
+          playSound(soundsRef.current.abilityButterfly);
+        }
       },
     },
-    firefly: {
-      name: '光の障壁',
-      description: '周囲に光の障壁を展開し、敵の接近を防ぎます（5秒間）',
+    caucasus: {
+      name: '王者の威圧',
+      description: '世界最大のカブトムシとしての威圧で、周囲の敵の能力を一時的に下げます',
       cooldown: 25000,
       effect: (bug: Bug, enemies: Enemy[]) => {
-        // 障壁のパーティクルエフェクト
-        createParticles(bug.x, bug.y, '#FFA500', 40, 'success');
-
-        // 敵の移動を制限
+        // 周囲の敵の能力を下げる
         setEnemies(prevEnemies => {
           return prevEnemies.map(enemy => {
             const distance = Math.sqrt(
               Math.pow(enemy.x - bug.x, 2) + Math.pow(enemy.y - bug.y, 2)
             );
-            if (distance < 150) { // 150px以内の敵の移動を制限
-              enemy.speed *= 0.5; // 速度を50%に減少
+            if (distance < 200) { // 200px以内の敵の能力を下げる
+              enemy.attack *= 0.7;  // 攻撃力を30%減少
+              enemy.defense *= 0.7; // 防御力を30%減少
+              enemy.speed *= 0.7;   // 移動速度を30%減少
             }
             return enemy;
           });
         });
+        // 威圧のパーティクルエフェクト
+        createParticles(bug.x, bug.y, '#006400', 40, 'success');
+        // 威圧音
+        playSound(soundsRef.current.abilityFirefly);
       },
     },
   };
@@ -1102,18 +1246,36 @@ export default function BugBattle() {
     });
   };
 
-  // タワーのHPを更新する関数を追加
+  // タワーのHPを更新する関数を修正
   const updateTowerHp = (isPlayer: boolean, damage: number) => {
     if (isPlayer) {
-      setPlayerTower(prev => ({
-        ...prev,
-        hp: Math.max(0, prev.hp - damage)
-      }));
+      setPlayerTower(prev => {
+        const newHp = Math.max(0, prev.hp - damage);
+        if (newHp <= 0) {
+          setIsGameClearScreen(true);
+          setIsGameOverScreen(false);
+          // ゲームクリア時に味方と敵を消去
+          setBugs([]);
+          setEnemies([]);
+        }
+        // 味方タワー攻撃音
+        playSound(soundsRef.current.playerTowerHit);
+        return { ...prev, hp: newHp };
+      });
     } else {
-      setEnemyTower(prev => ({
-        ...prev,
-        hp: Math.max(0, prev.hp - damage)
-      }));
+      setEnemyTower(prev => {
+        const newHp = Math.max(0, prev.hp - damage);
+        if (newHp <= 0) {
+          setIsGameOverScreen(true);
+          setIsGameClearScreen(false);
+          // ゲームオーバー時に味方と敵を消去
+          setBugs([]);
+          setEnemies([]);
+        }
+        // 敵タワー攻撃音
+        playSound(soundsRef.current.enemyTowerHit);
+        return { ...prev, hp: newHp };
+      });
     }
     animateTowerHit(isPlayer);
   };
@@ -1139,34 +1301,146 @@ export default function BugBattle() {
     }
   };
 
+  // ゲーム進行ガード
+  const isGameEnded = isGameOverScreen || isGameClearScreen;
+
+  // useEffectでアンマウント時にインターバルをクリア
+  useEffect(() => {
+    return () => {
+      if (gameLoopRef.current) clearInterval(gameLoopRef.current);
+      if (enemySpawnIntervalRef.current) clearInterval(enemySpawnIntervalRef.current);
+      if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
+    };
+  }, []);
+
+  // クールダウンの進捗を更新するuseEffect
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const now = Date.now();
+      setCooldownProgress({
+        3: Math.min(100, ((now - frames[2].lastUsed) / frames[2].cooldown) * 100),
+        4: Math.min(100, ((now - frames[3].lastUsed) / frames[3].cooldown) * 100)
+      });
+    }, 50); // 50ミリ秒ごとに更新
+
+    return () => clearInterval(interval);
+  }, [frames]);
+
+  // クールダウンフレームのクリック処理を修正
+  const handleCooldownFrameClick = (frameIndex: number) => {
+    if (isGameOverScreen || isGameClearScreen) return;
+    const now = Date.now();
+    const frame = frames[frameIndex];
+    
+    if (now - frame.lastUsed >= frame.cooldown) {
+      // クールダウンが終了している場合
+      setFrames(prevFrames => prevFrames.map((f, idx) => 
+        idx === frameIndex ? { ...f, lastUsed: now } : f
+      ));
+      
+      // 味方を生成（ゲーム終了時は生成しない）
+      if (!isGameOverScreen && !isGameClearScreen) {
+        const bugType = FRAME_BUG_TYPES[frame.id];
+        if (bugType) {
+          spawnBug(bugType);
+        }
+      }
+    }
+  };
+
   return (
     <GameLayout>
       <View style={styles.container}>
-        <View style={styles.gameContainer}>
-          {/* スコア表示を追加 */}
-          <View style={styles.scoreDisplay}>
-            <Text style={styles.scoreText}>スコア: {score}</Text>
+        {/* スコアを上部中央に */}
+        <View style={styles.scoreTopCenter}>
+          <Text style={styles.scoreText}>スコア: {score}</Text>
+        </View>
+        {/* 設定ボタン・メニュー */}
+        <TouchableOpacity
+          style={styles.settingsButton}
+          onPress={() => setIsSettingsVisible(true)}
+        >
+          <Ionicons name="ellipsis-horizontal" size={24} color="#333" />
+        </TouchableOpacity>
+        <GameMenu
+          visible={isSettingsVisible}
+          onClose={() => setIsSettingsVisible(false)}
+          onRetry={handleRetry}
+          onSwitchKana={handleSwitchKana}
+          isHiragana={isHiragana}
+          currentGame="bugbattle"
+        />
+        {/* ゲームオーバー画面 */}
+        {isGameOverScreen && (
+          <View style={styles.gameOverOverlay} pointerEvents="box-none">
+            <View style={styles.resultsContainer}>
+              <View style={[styles.winnerImagesContainer, { gap: 40 }]}>
+                {Object.values(ENEMY_IMAGES).map((image, index) => (
+                  <Image
+                    key={index}
+                    source={image}
+                    style={[styles.winnerImage, { transform: [{ rotate: '90deg' }] }]}
+                    resizeMode="contain"
+                  />
+                ))}
+              </View>
+              <Text style={styles.winnerText}>
+                😢 ゲームオーバー
+              </Text>
+              <View style={styles.resultTimes}>
+                <View style={styles.resultTimeRow}>
+                  <Text style={[styles.timeText, styles.parentTime]}>
+                    スコア: {score}
+                  </Text>
+                </View>
+              </View>
+            </View>
           </View>
-
-          <TouchableOpacity
-            style={styles.settingsButton}
-            onPress={() => setIsSettingsVisible(true)}
-          >
-            <Ionicons name="ellipsis-horizontal" size={24} color="#333" />
-          </TouchableOpacity>
-          <GameMenu
-            visible={isSettingsVisible}
-            onClose={() => setIsSettingsVisible(false)}
-            onRetry={handleRetry}
-            onSwitchKana={handleSwitchKana}
-            isHiragana={isHiragana}
-            currentGame="bugbattle"
-          />
-
+        )}
+        {/* ゲームクリア画面 */}
+        {isGameClearScreen && (
+          <View style={styles.gameOverOverlay} pointerEvents="box-none">
+            <View style={styles.resultsContainer}>
+              <View style={styles.winnerImagesContainer}>
+                {Object.values(BUG_IMAGES).map((image, index) => (
+                  <Image
+                    key={index}
+                    source={image}
+                    style={[styles.winnerImage, { transform: [{ rotate: '90deg' }] }]}
+                    resizeMode="contain"
+                  />
+                ))}
+              </View>
+              <Animated.Text
+                style={[
+                  styles.winnerText,
+                  {
+                    transform: [{
+                      translateY: textBounceAnim.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [0, -10],
+                      }),
+                    }],
+                  },
+                ]}
+              >
+                🎉 ゲームクリア！
+              </Animated.Text>
+              <View style={styles.resultTimes}>
+                <View style={styles.resultTimeRow}>
+                  <Text style={[styles.timeText, styles.parentTime]}>
+                    スコア: {score}
+                  </Text>
+                </View>
+              </View>
+            </View>
+          </View>
+        )}
+        <View style={styles.gameContainer}>
           <View style={styles.gameArea}>
             <View style={styles.battleArea}>
               {/* 敵のタワー（左側） */}
-              <View style={[styles.tower, { left: 40, top: 80 }]}>
+              <View style={[styles.tower, { left: 40, top: 80 }]}> 
                 <Animated.View style={{
                   transform: [{ translateX: playerTowerShake }],
                   backgroundColor: playerTowerHit ? '#ffcccc' : 'transparent',
@@ -1176,21 +1450,16 @@ export default function BugBattle() {
                     <EnemyCastleIcon width={120} height={280} />
                   </View>
                 </Animated.View>
-                <View style={styles.hpBarContainer}>
-                  <View 
-                    style={[
-                      styles.hpBar, 
-                      { 
-                        width: `${(playerTower.hp / playerTower.maxHp) * 100}%`,
-                        backgroundColor: playerTower.hp > playerTower.maxHp * 0.3 ? '#4CAF50' : '#F44336'
-                      }
-                    ]} 
-                  />
+                <View style={styles.hpBarOuter}>
+                  <View style={[styles.hpBarImproved, {
+                    width: `${(playerTower.hp / playerTower.maxHp) * 100}%`,
+                    backgroundColor: playerTower.hp > playerTower.maxHp * 0.3 ? '#4CAF50' : '#F44336'
+                  }]} />
+                  <Text style={styles.hpBarText}>{playerTower.hp} / {playerTower.maxHp}</Text>
                 </View>
               </View>
-
               {/* 味方のタワー（右側） */}
-              <View style={[styles.tower, { right: 40, top: 80 }]}>
+              <View style={[styles.tower, { right: 40, top: 80 }]}> 
                 <Animated.View style={{
                   transform: [{ translateX: enemyTowerShake }],
                   backgroundColor: enemyTowerHit ? '#ffcccc' : 'transparent',
@@ -1200,19 +1469,14 @@ export default function BugBattle() {
                     <BugCastleIcon width={120} height={280} />
                   </View>
                 </Animated.View>
-                <View style={styles.hpBarContainer}>
-                  <View 
-                    style={[
-                      styles.hpBar, 
-                      { 
-                        width: `${(enemyTower.hp / enemyTower.maxHp) * 100}%`,
-                        backgroundColor: enemyTower.hp > enemyTower.maxHp * 0.3 ? '#F44336' : '#4CAF50'
-                      }
-                    ]} 
-                  />
+                <View style={styles.hpBarOuter}>
+                  <View style={[styles.hpBarImproved, {
+                    width: `${(enemyTower.hp / enemyTower.maxHp) * 100}%`,
+                    backgroundColor: enemyTower.hp > enemyTower.maxHp * 0.3 ? '#F44336' : '#4CAF50'
+                  }]} />
+                  <Text style={styles.hpBarText}>{enemyTower.hp} / {enemyTower.maxHp}</Text>
                 </View>
               </View>
-
               {/* レベルアップ演出 */}
               {showLevelUpText && (
                 <Animated.View
@@ -1279,7 +1543,6 @@ export default function BugBattle() {
                     {
                       width: ENEMY_SIZES[enemy.type],
                       height: ENEMY_SIZES[enemy.type],
-                      borderRadius: ENEMY_SIZES[enemy.type] / 2,
                       left: enemy.x,
                       top: enemy.y,
                       transform: [
@@ -1288,9 +1551,11 @@ export default function BugBattle() {
                     },
                   ]}
                 >
-                  <Text style={styles.enemyEmoji}>
-                    {ENEMY_EMOJIS[enemy.type]}
-                  </Text>
+                  <Image
+                    source={ENEMY_IMAGES[enemy.type]}
+                    style={styles.enemyImage}
+                    resizeMode="contain"
+                  />
                 </Animated.View>
               ))}
 
@@ -1301,7 +1566,8 @@ export default function BugBattle() {
                     style={[
                       styles.bug,
                       {
-                        backgroundColor: BUG_COLORS[bug.type],
+                        width: BUG_SIZES[bug.type],
+                        height: BUG_SIZES[bug.type],
                         left: bug.x,
                         top: bug.y,
                         transform: [
@@ -1311,9 +1577,11 @@ export default function BugBattle() {
                       },
                     ]}
                   >
-                    <Text style={styles.bugEmoji}>
-                      {BUG_EMOJIS[bug.type]}
-                    </Text>
+                    <Image
+                      source={BUG_IMAGES[bug.type]}
+                      style={styles.bugImage}
+                      resizeMode="contain"
+                    />
                   </Animated.View>
                   <TouchableOpacity
                     style={[
@@ -1349,7 +1617,7 @@ export default function BugBattle() {
             left: 0, 
             right: 0, 
             height: isSmallScreen ? 100 : 300,
-            zIndex: 1000,
+            zIndex: 100,
             backgroundColor: 'white',
             borderTopLeftRadius: 20,
             borderTopRightRadius: 20,
@@ -1367,16 +1635,26 @@ export default function BugBattle() {
                     styles.frame,
                     isSmallScreen && styles.frameSmall,
                     {
-                      borderColor: BUG_COLORS[frame.id === 1 ? 'ladybug' : frame.id === 2 ? 'wasp' : 'butterfly']
+                      borderColor: BUG_COLORS[frame.id === 1 ? 'kabuto' : frame.id === 2 ? 'kuwagata' : frame.id === 3 ? 'gohon' : 'caucasus'],
+                      width: frame.id <= 2 ? '28%' : '16%',
+                      aspectRatio: frame.id <= 2 ? undefined : 1,
                     }
                   ]}
                 >
-                  <View style={styles.frameContent}>
-                    {frame.question ? (
+                  <View style={[
+                    styles.frameContent,
+                    frame.id <= 2 ? undefined : { justifyContent: 'center' }
+                  ]}>
+                    {frame.id <= 2 ? (
+                      // クイズフレーム（1番目と2番目）
                       <>
-                        <Text style={[styles.bugPreview, isSmallScreen && styles.bugPreviewSmall]}>
-                          {BUG_EMOJIS[frame.id === 1 ? 'ladybug' : frame.id === 2 ? 'wasp' : 'butterfly']}
-                        </Text>
+                        <View style={[styles.bugPreview, isSmallScreen && styles.bugPreviewSmall]}>
+                          <Image
+                            source={BUG_IMAGES[frame.id === 1 ? 'kabuto' : 'kuwagata']}
+                            style={{ width: '100%', height: '100%' }}
+                            resizeMode="contain"
+                          />
+                        </View>
                         <View style={styles.slotsContainer}>
                           {frame.slots.map((slot, index) => (
                             <View
@@ -1384,11 +1662,19 @@ export default function BugBattle() {
                               style={[
                                 styles.letterSlot,
                                 slot ? styles.filledSlot : null,
-                                isSmallScreen && styles.letterSlotSmall
+                                isSmallScreen && styles.letterSlotSmall,
+                                frame.id === 2 && {
+                                  borderColor: '#4169E1',
+                                  backgroundColor: 'rgba(65, 105, 225, 0.08)',
+                                }
                               ]}
                             >
                               {slot && (
-                                <Text style={[styles.letterSlotText, isSmallScreen && styles.letterSlotTextSmall]}>
+                                <Text style={[
+                                  styles.letterSlotText,
+                                  isSmallScreen && styles.letterSlotTextSmall,
+                                  frame.id === 2 && { color: '#4169E1' }
+                                ]}>
                                   {slot}
                                 </Text>
                               )}
@@ -1399,11 +1685,18 @@ export default function BugBattle() {
                           {frame.letters.map((letter, index) => (
                             <TouchableOpacity
                               key={`available-${index}`}
-                              style={[styles.availableLetter, isSmallScreen && styles.availableLetterSmall]}
+                              style={[
+                                styles.availableLetter,
+                                isSmallScreen && styles.availableLetterSmall,
+                                frame.id === 2 && { backgroundColor: '#4169E1' }
+                              ]}
                               onPress={() => handleLetterPress(frameIndex, letter)}
                               activeOpacity={0.7}
                             >
-                              <Text style={[styles.availableLetterText, isSmallScreen && styles.availableLetterTextSmall]}>
+                              <Text style={[
+                                styles.availableLetterText,
+                                isSmallScreen && styles.availableLetterTextSmall
+                              ]}>
                                 {letter}
                               </Text>
                             </TouchableOpacity>
@@ -1411,7 +1704,36 @@ export default function BugBattle() {
                         </View>
                       </>
                     ) : (
-                      <Text style={[styles.frameText, isSmallScreen && styles.frameTextSmall]}>枠 {frame.id}</Text>
+                      // クールダウンフレーム（3番目と4番目）
+                      <TouchableOpacity
+                        style={styles.cooldownFrame}
+                        onPress={() => handleCooldownFrameClick(frameIndex)}
+                        disabled={cooldownProgress[frame.id] < 100}
+                      >
+                        <View style={styles.cooldownContent}>
+                          <Image
+                            source={BUG_IMAGES[frame.id === 3 ? 'gohon' : 'caucasus']}
+                            style={[
+                              styles.cooldownBugImage,
+                              cooldownProgress[frame.id] < 100 && styles.cooldownBugImageDisabled
+                            ]}
+                            resizeMode="contain"
+                          />
+                          <View style={styles.cooldownTimerContainer}>
+                            <View style={styles.cooldownTimerBackground}>
+                              <View
+                                style={[
+                                  styles.cooldownTimerFill,
+                                  {
+                                    width: `${cooldownProgress[frame.id]}%`,
+                                    backgroundColor: frame.id === 3 ? '#CD853F' : '#006400'
+                                  }
+                                ]}
+                              />
+                            </View>
+                          </View>
+                        </View>
+                      </TouchableOpacity>
                     )}
                   </View>
                 </View>
@@ -1427,7 +1749,7 @@ export default function BugBattle() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f0f0f0',
+    backgroundColor: 'transparent',
   } as ViewStyle,
   gameContainer: {
     flex: 1,
@@ -1437,13 +1759,13 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 10,
     right: 10,
-    zIndex: 2,
+    zIndex: 10000,
     padding: 10,
   } as ViewStyle,
   gameArea: {
     flex: 1,
     position: 'relative',
-    backgroundColor: '#e8f4f8',
+    backgroundColor: 'transparent',
     width: '100%',
     height: screenHeight - 400,
   } as ViewStyle,
@@ -1461,139 +1783,172 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: 'white',
-    padding: 15,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    elevation: 5,
+    height: isSmallScreen ? 100 : 300,
+    zIndex: 2,
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderTopLeftRadius: 30,
+    borderTopRightRadius: 30,
+    elevation: 8,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: -3 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4.84,
-    zIndex: 1000,
+    shadowOffset: { width: 0, height: -5 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    padding: isSmallScreen ? 10 : 20,
   } as ViewStyle,
   framesContainer: {
     flexDirection: 'row',
     justifyContent: 'space-around',
-    padding: 5,
+    padding: 10,
     height: '100%',
-    gap: 10, // フレーム間の間隔を追加
+    gap: 10,
   } as ViewStyle,
   frame: {
-    width: '30%',
+    width: '22%',
     height: '100%',
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    borderRadius: 15,
-    padding: 12,
-    borderWidth: 3,
+    backgroundColor: 'rgba(255, 255, 255, 0.98)',
+    borderRadius: 20,
+    padding: 15,
+    borderWidth: 2,
     borderColor: '#4a90e2',
     justifyContent: 'flex-start',
     alignItems: 'center',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 3.84,
-    elevation: 4,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    elevation: 6,
+    transform: [{ perspective: 1000 }],
   } as ViewStyle,
   frameContent: {
     width: '100%',
     height: '100%',
     justifyContent: 'flex-start',
     alignItems: 'center',
-    paddingTop: 8,
+    paddingTop: 10,
   } as ViewStyle,
   bugPreview: {
     position: 'absolute',
-    top: 8,
-    right: 8,
-    fontSize: 36,
-    opacity: 0.8,
-  } as TextStyle,
+    top: 10,
+    right: 10,
+    width: 60,
+    height: 60,
+    opacity: 0.95,
+    transform: [{ rotate: '5deg' }, { scale: 0.9 }], // 回転と縮小を組み合わせて自然な見た目に
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+    elevation: 3,
+  } as ViewStyle,
+  bugPreviewSmall: {
+    width: 40,
+    height: 40,
+    transform: [{ rotate: '5deg' }, { scale: 0.9 }], // 回転と縮小を組み合わせて自然な見た目に
+  } as ViewStyle,
+  bugPreviewImage: {
+    width: '100%',
+    height: '100%',
+    transform: [{ scale: 1.1 }], // 画像を少し大きくして見やすく
+  } as ImageStyle,
   slotsContainer: {
     flexDirection: 'row',
     justifyContent: 'center',
     flexWrap: 'wrap',
     width: '100%',
-    paddingHorizontal: 5,
-    marginTop: 5,
-    gap: 4, // スロット間の間隔を追加
+    paddingHorizontal: 8,
+    marginTop: 8,
+    gap: 6,
   } as ViewStyle,
   letterSlot: {
-    width: 80,
-    height: 80,
+    width: isSmallScreen ? 40 : 60,
+    height: isSmallScreen ? 40 : 60,
     borderWidth: 2,
-    borderColor: '#4a90e2',
+    borderColor: '#8B4513',
     borderRadius: 12,
-    margin: 3,
+    margin: 2,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(74, 144, 226, 0.05)',
+    backgroundColor: 'rgba(255, 152, 0, 0.08)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 3,
   } as ViewStyle,
   filledSlot: {
-    backgroundColor: '#4a90e2',
-    borderColor: '#4a90e2',
+    borderColor: '#8B4513',
+    transform: [{ scale: 1.05 }],
   } as ViewStyle,
   letterSlotText: {
-    color: 'white',
-    fontSize: 48,
+    color: '#8B4513',
+    fontSize: isSmallScreen ? 28 : 42,
     fontWeight: 'bold',
+    textShadowColor: 'rgba(0, 0, 0, 0.2)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 2,
   } as TextStyle,
   availableLettersContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'center',
-    padding: 5,
+    padding: 6,
     marginTop: 8,
     width: '100%',
     minHeight: 60,
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-    borderRadius: 12,
-    gap: 4, // 文字間の間隔を追加
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: 15,
+    gap: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 3,
   } as ViewStyle,
   availableLetter: {
-    width: 70,
-    height: 70,
-    backgroundColor: '#4a90e2',
+    width: isSmallScreen ? 35 : 50,
+    height: isSmallScreen ? 35 : 50,
+    backgroundColor: '#8B4513',
     borderRadius: 12,
-    margin: 3,
+    margin: 2,
     justifyContent: 'center',
     alignItems: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.15,
-    shadowRadius: 2.84,
-    elevation: 2,
+    shadowRadius: 3,
+    elevation: 4,
+    transform: [{ perspective: 1000 }],
   } as ViewStyle,
   availableLetterText: {
     color: 'white',
-    fontSize: 40,
+    fontSize: isSmallScreen ? 24 : 36,
     fontWeight: 'bold',
+    textShadowColor: 'rgba(0, 0, 0, 0.2)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 2,
   } as TextStyle,
   frameSmall: {
-    padding: 8,
-    borderWidth: 2.5,
+    padding: 10,
+    borderWidth: 2,
   } as ViewStyle,
-  bugPreviewSmall: {
-    fontSize: 24,
-  } as TextStyle,
   letterSlotSmall: {
-    width: 50,
-    height: 50,
+    width: 45,
+    height: 45,
     margin: 2,
   } as ViewStyle,
   letterSlotTextSmall: {
-    fontSize: 32,
+    fontSize: 28,
   } as TextStyle,
   availableLetterSmall: {
-    width: 50,
-    height: 50,
+    width: 45,
+    height: 45,
     margin: 2,
   } as ViewStyle,
   availableLetterTextSmall: {
-    fontSize: 28,
+    fontSize: 24,
   } as TextStyle,
   frameTextSmall: {
-    fontSize: 12,
+    fontSize: 14,
   } as TextStyle,
   levelUpContainer: {
     position: 'absolute',
@@ -1631,7 +1986,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
     shadowRadius: 3.84,
-    zIndex: 1000,
+    zIndex: 100, // 1000から100に変更
   } as ViewStyle,
   comboText: {
     color: 'white',
@@ -1654,9 +2009,6 @@ const styles = StyleSheet.create({
   },
   bug: {
     position: 'absolute',
-    width: 80,
-    height: 80,
-    borderRadius: 40,
     justifyContent: 'center',
     alignItems: 'center',
     elevation: 5,
@@ -1665,14 +2017,16 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.25,
     shadowRadius: 3.84,
     zIndex: 2,
+    backgroundColor: 'transparent',
+    transform: [{ scale: 0.9 }],
   },
-  bugEmoji: {
-    fontSize: 50,
+  bugImage: {
+    width: '100%',
+    height: '100%',
+    transform: [{ scale: 1.1 }],
   },
   enemy: {
     position: 'absolute',
-    width: 100,
-    height: 100,
     justifyContent: 'center',
     alignItems: 'center',
     elevation: 5,
@@ -1681,7 +2035,13 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.25,
     shadowRadius: 3.84,
     zIndex: 3,
-    backgroundColor: '#ff00ff',
+    backgroundColor: 'transparent',
+    transform: [{ scale: 0.9 }],
+  },
+  enemyImage: {
+    width: '100%',
+    height: '100%',
+    transform: [{ scale: 1.1 }],
   },
   enemyText: {
     color: 'white',
@@ -1692,26 +2052,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     textAlign: 'center',
     marginBottom: 5,
-    color: '#4a90e2',
-  },
-  confirmButton: {
-    position: 'absolute',
-    right: 20,
-    bottom: 20,
-    backgroundColor: '#4a90e2',
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 25,
-    elevation: 5,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-  },
-  confirmButtonText: {
-    color: 'white',
-    fontSize: 18,
-    fontWeight: 'bold',
+    color: '#ffd54f',
   },
   battleResultContainer: {
     position: 'absolute',
@@ -1720,7 +2061,7 @@ const styles = StyleSheet.create({
     right: 0,
     alignItems: 'center',
     justifyContent: 'center',
-    zIndex: 1000,
+    zIndex: 100, // 1000から100に変更
   },
   battleResultText: {
     fontSize: 24,
@@ -1805,20 +2146,14 @@ const styles = StyleSheet.create({
   startButtonContainer: {} as ViewStyle,
   startButton: {} as ViewStyle,
   startButtonText: {} as TextStyle,
-  scoreDisplay: {
+  scoreTopCenter: {
     position: 'absolute',
     top: 10,
-    right: 50,
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-    padding: 10,
-    borderRadius: 20,
-    zIndex: 2,
-    elevation: 5,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-  } as ViewStyle,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    zIndex: 10,
+  },
   scoreText: {
     fontSize: 20,
     fontWeight: 'bold',
@@ -1844,17 +2179,147 @@ const styles = StyleSheet.create({
   towerEmoji: {
     fontSize: 120,
   } as TextStyle,
-  hpBarContainer: {
-    position: 'absolute',
-    bottom: 0,
-    width: '100%',
-    height: 10,
+  hpBarOuter: {
+    position: 'relative',
+    width: 110,
+    height: 22,
     backgroundColor: '#e0e0e0',
-    borderRadius: 5,
+    borderRadius: 11,
+    borderWidth: 2,
+    borderColor: '#888',
+    marginTop: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+    overflow: 'hidden',
+  },
+  hpBarImproved: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    height: '100%',
+    borderRadius: 11,
+  },
+  hpBarText: {
+    color: '#222',
+    fontWeight: 'bold',
+    fontSize: 14,
+    zIndex: 2,
+  },
+  resultsContainer: {
+    padding: 32,
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 10,
+    minWidth: 300,
+  } as ViewStyle,
+  winnerEmoji: {
+    fontSize: 48,
+    textAlign: 'center',
+    marginBottom: 10,
+  },
+  winnerText: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginBottom: 20,
+    color: '#333',
+  },
+  resultTimes: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginTop: 10,
+    marginBottom: 20,
+  },
+  resultTimeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  playerEmoji: {
+    fontSize: 24,
+    marginRight: 10,
+  },
+  timeText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  parentTime: {
+    color: '#8B4513',
+  },
+  retryButton: {
+    backgroundColor: '#4a90e2',
+    paddingHorizontal: 32,
+    paddingVertical: 12,
+    borderRadius: 24,
+    marginTop: 10,
+  },
+  retryButtonText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  cooldownFrame: {
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+  } as ViewStyle,
+  cooldownContent: {
+    width: '100%',
+    alignItems: 'center',
+    gap: 10,
+  } as ViewStyle,
+  cooldownBugImage: {
+    width: 120,
+    height: 120,
+    opacity: 1,
+  } as ImageStyle,
+  cooldownBugImageDisabled: {
+    opacity: 0.5,
+  } as ImageStyle,
+  cooldownTimerContainer: {
+    width: '80%',
+    alignItems: 'center',
+    marginTop: 15,
+  } as ViewStyle,
+  cooldownTimerBackground: {
+    width: '100%',
+    height: 12,
+    backgroundColor: '#e0e0e0',
+    borderRadius: 6,
     overflow: 'hidden',
   } as ViewStyle,
-  hpBar: {
+  cooldownTimerFill: {
     height: '100%',
-    borderRadius: 5,
+    borderRadius: 6,
+  } as ViewStyle,
+  winnerImagesContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 20,
+    marginBottom: 20,
+    padding: 10,
+  } as ViewStyle,
+  winnerImage: {
+    width: 100,
+    height: 100,
+    transform: [{ scale: 1.2 }],
+  } as ImageStyle,
+  gameOverOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 999,
   } as ViewStyle,
 }); 

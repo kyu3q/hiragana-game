@@ -671,7 +671,7 @@ export default function BugBattle() {
 
   // 敵の生成
   const spawnEnemy = async () => {
-    if (isGameOverScreen || isGameClearScreen) return; // ゲームクリア時も敵の生成を停止
+    if (isGameOverScreen || isGameClearScreen) return;
     const difficulty = getCurrentDifficulty();
     const currentEnemyCount = enemiesRef.current.length;
     const maxEnemies = 5;
@@ -693,16 +693,16 @@ export default function BugBattle() {
       id: enemyIdRef.current,
       type: enemyType,
       x: 150,
-      y: isSmallScreen ? 170 : 250,
+      y: isSmallScreen ? 150 : 250,
       targetX: 0,
       targetY: 0,
-      speed: difficulty.enemySpeed * 2.0, // 1.5から2.0に増加
+      speed: difficulty.enemySpeed * 2.0,
       rotation: new Animated.Value(0),
       scale: new Animated.Value(1),
-      hp: 100, // 60から100に増加
-      maxHp: 100, // 60から100に増加
-      attack: 18, // 12から18に増加
-      defense: 12, // 8から12に増加
+      hp: 120, // HPを増加
+      maxHp: 120,
+      attack: 15, // 攻撃力を調整
+      defense: 10, // 防御力を調整
       isPoisoned: false,
       poisonTimer: null,
       poisonDamage: 0,
@@ -844,10 +844,10 @@ export default function BugBattle() {
     
     currentBugs.forEach(bug => {
       // 味方のタワーとの衝突判定
-      const towerRightEdge = isSmallScreen ? 20 + 80 : 40 + 100; // タワーの右端の位置
-      const collisionOffset = isSmallScreen ? 20 : 40; // 衝突判定のオフセット
+      const towerRightEdge = isSmallScreen ? 20 + 80 : 40 + 100;
+      const collisionOffset = isSmallScreen ? 20 : 40;
       if (bug.x <= towerRightEdge - collisionOffset) {
-        updateTowerHp(true, 10);
+        updateTowerHp(true, 8); // タワーへのダメージを調整
         animateBugDisappearance(bug);
         return;
       }
@@ -875,7 +875,7 @@ export default function BugBattle() {
           // 敵を倒した場合のみスコアを加算
           if (enemy.hp <= 0) {
             const difficulty = getCurrentDifficulty();
-            const scoreGain = Math.floor(10 * difficulty.scoreMultiplier);
+            const scoreGain = Math.floor(15 * difficulty.scoreMultiplier); // スコアを増加
             setScore(prev => prev + scoreGain);
           }
 
@@ -892,10 +892,10 @@ export default function BugBattle() {
 
     currentEnemies.forEach(enemy => {
       // 敵のタワーとの衝突判定
-      const towerLeftEdge = screenWidth - (isSmallScreen ? 20 + 80 : 40 + 100); // タワーの左端の位置
-      const collisionOffset = isSmallScreen ? 80 : 120; // 衝突判定のオフセットを増加
+      const towerLeftEdge = screenWidth - (isSmallScreen ? 20 + 80 : 40 + 100);
+      const collisionOffset = isSmallScreen ? 80 : 120;
       if (enemy.x >= towerLeftEdge - collisionOffset) {
-        updateTowerHp(false, 10);
+        updateTowerHp(false, 8); // タワーへのダメージを調整
         animateEnemyDisappearance(enemy);
         return;
       }
@@ -1064,7 +1064,7 @@ export default function BugBattle() {
     }
   }, [isSettingsVisible]);
 
-  // 虫の生成
+  // 味方の生成
   const spawnBug = (bugType: BugType) => {
     if (isGameOverScreen || isGameClearScreen) return;
     const difficulty = getCurrentDifficulty();
@@ -1073,22 +1073,22 @@ export default function BugBattle() {
       id: bugIdRef.current,
       type: bugType,
       x: screenWidth - 200,
-      y: isSmallScreen ? 170 : 250, // より上に移動
+      y: isSmallScreen ? 150 : 250,
       targetX: 0,
       targetY: 0,
-      speed: difficulty.bugSpeed * 2.5, // 2.0から2.5に増加
+      speed: difficulty.bugSpeed * 2.5,
       rotation: new Animated.Value(0),
       scale: new Animated.Value(1),
       opacity: new Animated.Value(1),
       ability: BUG_ABILITIES[bugType],
       lastAbilityUse: 0,
-      hp: 120,
-      maxHp: 120,
-      defense: 15,
-      baseDefense: 15,
+      hp: 100, // HPを調整
+      maxHp: 100,
+      defense: 12, // 防御力を調整
+      baseDefense: 12,
       isDefenseBoosted: false,
       defenseBoostTimer: null,
-      attack: 12,
+      attack: 15, // 攻撃力を調整
     };
     setBugs(prevBugs => {
       const newBugs = [...prevBugs, newBug];
@@ -1251,10 +1251,14 @@ export default function BugBattle() {
     kabuto: {
       name: '角の突進',
       description: '強力な角で敵を突き飛ばし、一時的に動きを鈍らせます',
-      cooldown: 10000,
+      cooldown: 8000,
       effect: (bug: Bug, enemies: Enemy[]) => {
         // 最も近い敵を探す
+        if (!enemies || enemies.length === 0) return;
+        
         const nearestEnemy = enemies.reduce((nearest, current) => {
+          if (!nearest) return current;
+          
           const nearestDist = Math.sqrt(
             Math.pow(nearest.x - bug.x, 2) + Math.pow(nearest.y - bug.y, 2)
           );
@@ -1262,24 +1266,43 @@ export default function BugBattle() {
             Math.pow(current.x - bug.x, 2) + Math.pow(current.y - bug.y, 2)
           );
           return currentDist < nearestDist ? current : nearest;
-        });
+        }, null as Enemy | null);
+        
+        if (!nearestEnemy) return;
         if (nearestEnemy) {
-          // 敵の移動速度を50%に減少
-          nearestEnemy.speed *= 0.5;
-          // 突進のパーティクルエフェクト
-          createParticles(nearestEnemy.x, nearestEnemy.y, '#8B4513', 20, 'success');
+          // 敵の移動速度を30%に減少（50%から強化）
+          nearestEnemy.speed *= 0.3;
+          // 突進のパーティクルエフェクトを増加
+          createParticles(nearestEnemy.x, nearestEnemy.y, '#8B4513', 30, 'success');
           // 突進音
           playSound(soundsRef.current.abilityLadybug);
+          // 視覚的なフィードバック
+          Animated.sequence([
+            Animated.timing(bug.scale, {
+              toValue: 1.5,
+              duration: 200,
+              useNativeDriver: true,
+            }),
+            Animated.timing(bug.scale, {
+              toValue: 1,
+              duration: 200,
+              useNativeDriver: true,
+            }),
+          ]).start();
         }
       },
     },
     kuwagata: {
       name: '大アゴの挟撃',
       description: '強力な大アゴで敵を挟み、防御力を一時的に下げます',
-      cooldown: 15000,
+      cooldown: 12000,
       effect: (bug: Bug, enemies: Enemy[]) => {
         // 最も近い敵を探す
+        if (!enemies || enemies.length === 0) return;
+        
         const nearestEnemy = enemies.reduce((nearest, current) => {
+          if (!nearest) return current;
+          
           const nearestDist = Math.sqrt(
             Math.pow(nearest.x - bug.x, 2) + Math.pow(nearest.y - bug.y, 2)
           );
@@ -1287,24 +1310,43 @@ export default function BugBattle() {
             Math.pow(current.x - bug.x, 2) + Math.pow(current.y - bug.y, 2)
           );
           return currentDist < nearestDist ? current : nearest;
-        });
+        }, null as Enemy | null);
+        
+        if (!nearestEnemy) return;
         if (nearestEnemy) {
-          // 敵の防御力を50%に減少
-          nearestEnemy.defense *= 0.5;
-          // 挟撃のパーティクルエフェクト
-          createParticles(nearestEnemy.x, nearestEnemy.y, '#2F4F4F', 20, 'success');
+          // 敵の防御力を30%に減少（50%から強化）
+          nearestEnemy.defense *= 0.3;
+          // 挟撃のパーティクルエフェクトを増加
+          createParticles(nearestEnemy.x, nearestEnemy.y, '#2F4F4F', 30, 'success');
           // 挟撃音
           playSound(soundsRef.current.abilityWasp);
+          // 視覚的なフィードバック
+          Animated.sequence([
+            Animated.timing(bug.scale, {
+              toValue: 1.5,
+              duration: 200,
+              useNativeDriver: true,
+            }),
+            Animated.timing(bug.scale, {
+              toValue: 1,
+              duration: 200,
+              useNativeDriver: true,
+            }),
+          ]).start();
         }
       },
     },
     gohon: {
       name: '五本角の突撃',
       description: '五本の角で敵を貫き、攻撃力を一時的に下げます',
-      cooldown: 20000,
+      cooldown: 15000,
       effect: (bug: Bug, enemies: Enemy[]) => {
         // 最も近い敵を探す
+        if (!enemies || enemies.length === 0) return;
+        
         const nearestEnemy = enemies.reduce((nearest, current) => {
+          if (!nearest) return current;
+          
           const nearestDist = Math.sqrt(
             Math.pow(nearest.x - bug.x, 2) + Math.pow(nearest.y - bug.y, 2)
           );
@@ -1312,21 +1354,36 @@ export default function BugBattle() {
             Math.pow(current.x - bug.x, 2) + Math.pow(current.y - bug.y, 2)
           );
           return currentDist < nearestDist ? current : nearest;
-        });
+        }, null as Enemy | null);
+        
+        if (!nearestEnemy) return;
         if (nearestEnemy) {
-          // 敵の攻撃力を50%に減少
-          nearestEnemy.attack *= 0.5;
-          // 突撃のパーティクルエフェクト
-          createParticles(nearestEnemy.x, nearestEnemy.y, '#CD853F', 20, 'success');
+          // 敵の攻撃力を30%に減少（50%から強化）
+          nearestEnemy.attack *= 0.3;
+          // 突撃のパーティクルエフェクトを増加
+          createParticles(nearestEnemy.x, nearestEnemy.y, '#CD853F', 30, 'success');
           // 突撃音
           playSound(soundsRef.current.abilityButterfly);
+          // 視覚的なフィードバック
+          Animated.sequence([
+            Animated.timing(bug.scale, {
+              toValue: 1.5,
+              duration: 200,
+              useNativeDriver: true,
+            }),
+            Animated.timing(bug.scale, {
+              toValue: 1,
+              duration: 200,
+              useNativeDriver: true,
+            }),
+          ]).start();
         }
       },
     },
     caucasus: {
       name: '王者の威圧',
       description: '世界最大のカブトムシとしての威圧で、周囲の敵の能力を一時的に下げます',
-      cooldown: 25000,
+      cooldown: 20000, // 25秒から20秒に短縮
       effect: (bug: Bug, enemies: Enemy[]) => {
         // 周囲の敵の能力を下げる
         setEnemies(prevEnemies => {
@@ -1334,18 +1391,33 @@ export default function BugBattle() {
             const distance = Math.sqrt(
               Math.pow(enemy.x - bug.x, 2) + Math.pow(enemy.y - bug.y, 2)
             );
-            if (distance < 200) { // 200px以内の敵の能力を下げる
-              enemy.attack *= 0.7;  // 攻撃力を30%減少
-              enemy.defense *= 0.7; // 防御力を30%減少
-              enemy.speed *= 0.7;   // 移動速度を30%減少
+            if (distance < 250) { // 範囲を200pxから250pxに拡大
+              enemy.attack *= 0.5;  // 攻撃力を50%減少（30%から強化）
+              enemy.defense *= 0.5; // 防御力を50%減少（30%から強化）
+              enemy.speed *= 0.5;   // 移動速度を50%減少（30%から強化）
+              // 各敵にパーティクルエフェクトを追加
+              createParticles(enemy.x, enemy.y, '#006400', 20, 'success');
             }
             return enemy;
           });
         });
-        // 威圧のパーティクルエフェクト
-        createParticles(bug.x, bug.y, '#006400', 40, 'success');
+        // 威圧のパーティクルエフェクトを増加
+        createParticles(bug.x, bug.y, '#006400', 50, 'success');
         // 威圧音
         playSound(soundsRef.current.abilityFirefly);
+        // 視覚的なフィードバック
+        Animated.sequence([
+          Animated.timing(bug.scale, {
+            toValue: 1.8,
+            duration: 300,
+            useNativeDriver: true,
+          }),
+          Animated.timing(bug.scale, {
+            toValue: 1,
+            duration: 300,
+            useNativeDriver: true,
+          }),
+        ]).start();
       },
     },
   };
@@ -1605,7 +1677,7 @@ export default function BugBattle() {
           <View style={styles.gameArea}>
             <View style={styles.battleArea}>
               {/* 敵のタワー（左側） */}
-              <View style={[towerStyle, { left: isSmallScreen ? 20 : 40, top: isSmallScreen ? 20 : 80 }]}> 
+              <View style={[styles.tower, { left: isSmallScreen ? 20 : 40, top: isSmallScreen ? 20 : 80 }]}> 
                 <View style={[styles.hpBarOuter, { marginBottom: isSmallScreen ? 2 : 8 }]}>
                   <View style={[styles.hpBarImproved, {
                     width: `${(playerTower.hp / playerTower.maxHp) * 100}%`,
@@ -1619,12 +1691,12 @@ export default function BugBattle() {
                   borderRadius: 20,
                 }}>
                   <View style={styles.towerEmojiContainer}>
-                    <EnemyCastleIcon width={isSmallScreen ? 80 : 120} height={isSmallScreen ? 200 : 280} />
+                    <EnemyCastleIcon width={isSmallScreen ? 80 : 120} height={isSmallScreen ? 180 : 280} />
                   </View>
                 </Animated.View>
               </View>
               {/* 味方のタワー（右側） */}
-              <View style={[towerStyle, { right: isSmallScreen ? 20 : 40, top: isSmallScreen ? 20 : 80 }]}> 
+              <View style={[styles.tower, { right: isSmallScreen ? 20 : 40, top: isSmallScreen ? 20 : 80 }]}> 
                 <View style={[styles.hpBarOuter, { marginBottom: isSmallScreen ? 2 : 8 }]}>
                   <View style={[styles.hpBarImproved, {
                     width: `${(enemyTower.hp / enemyTower.maxHp) * 100}%`,
@@ -1638,7 +1710,7 @@ export default function BugBattle() {
                   borderRadius: 20,
                 }}>
                   <View style={styles.towerEmojiContainer}>
-                    <BugCastleIcon width={isSmallScreen ? 80 : 120} height={isSmallScreen ? 200 : 280} />
+                    <BugCastleIcon width={isSmallScreen ? 80 : 120} height={isSmallScreen ? 180 : 280} />
                   </View>
                 </Animated.View>
               </View>
@@ -1748,65 +1820,56 @@ export default function BugBattle() {
                       resizeMode="contain"
                     />
                   </Animated.View>
-                  <TouchableOpacity
-                    style={[
-                      styles.abilityButton,
-                      {
-                        backgroundColor: Date.now() - bug.lastAbilityUse < bug.ability.cooldown
-                          ? '#ccc'
-                          : '#4a90e2',
-                      },
-                    ]}
-                    onPress={() => useAbility(bug)}
-                    disabled={Date.now() - bug.lastAbilityUse < bug.ability.cooldown}
-                  >
-                    <Text style={styles.abilityButtonText}>
-                      {bug.ability.name}
-                    </Text>
-                    {Date.now() - bug.lastAbilityUse < bug.ability.cooldown && (
-                      <View style={styles.abilityCooldown}>
-                        <Text style={styles.abilityCooldownText}>
-                          {Math.ceil((bug.ability.cooldown - (Date.now() - bug.lastAbilityUse)) / 1000)}s
-                        </Text>
-                      </View>
-                    )}
-                  </TouchableOpacity>
                 </React.Fragment>
               ))}
             </View>
           </View>
 
-          <View style={[styles.questionArea, { 
-            position: 'absolute', 
-            bottom: 0, 
-            left: 0, 
-            right: 0, 
-            height: isSmallScreen ? 120 : 300, // 小画面のみ高さを120pxに変更
-            zIndex: 100,
-            backgroundColor: 'rgba(255, 255, 255, 0.95)',
-            borderTopLeftRadius: 30,
-            borderTopRightRadius: 30,
-            elevation: 8,
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: -5 },
-            shadowOpacity: 0.2,
-            shadowRadius: 8,
-            padding: isSmallScreen ? 4 : 20, // 小画面のみパディングを調整
-          }]}>
-            <View style={[styles.framesContainer, {
-              gap: isSmallScreen ? 2 : 10, // 小画面のみフレーム間の間隔を調整
-            }]}>
+          <View style={[styles.questionArea]}>
+            {/* 特殊能力ボタンエリア */}
+            <View style={styles.abilityButtonsContainer}>
+              {bugs.map(bug => (
+                <TouchableOpacity
+                  key={`ability-${bug.id}`}
+                  style={[
+                    styles.abilityButtonContainer,
+                    {
+                      backgroundColor: Date.now() - bug.lastAbilityUse < bug.ability.cooldown
+                        ? '#e0e0e0'
+                        : BUG_COLORS[bug.type],
+                      opacity: Date.now() - bug.lastAbilityUse < bug.ability.cooldown ? 0.7 : 1,
+                    }
+                  ]}
+                  onPress={() => useAbility(bug)}
+                  disabled={Date.now() - bug.lastAbilityUse < bug.ability.cooldown}
+                >
+                  <View style={styles.abilityButtonContent}>
+                    <Text style={styles.abilityButtonLabel}>
+                      {bug.ability.name}
+                    </Text>
+                    {Date.now() - bug.lastAbilityUse < bug.ability.cooldown && (
+                      <View style={styles.abilityCooldownOverlay}>
+                        <Text style={styles.abilityCooldownLabel}>
+                          {Math.ceil((bug.ability.cooldown - (Date.now() - bug.lastAbilityUse)) / 1000)}s
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <View style={styles.framesContainer}>
               {frames.map((frame, frameIndex) => (
                 <View
                   key={frame.id}
                   style={[
                     styles.frame,
-                    isSmallScreen && styles.frameSmall,
                     {
                       borderColor: BUG_COLORS[frame.id === 1 ? 'kabuto' : frame.id === 2 ? 'kuwagata' : frame.id === 3 ? 'gohon' : 'caucasus'],
                       width: frame.id <= 2 ? '28%' : '16%',
                       aspectRatio: frame.id <= 2 ? undefined : 1,
-                      padding: isSmallScreen ? 4 : 15, // 小画面のみフレーム内のパディングを調整
+                      padding: isSmallScreen ? 4 : 10,
                     }
                   ]}
                 >
@@ -1817,7 +1880,7 @@ export default function BugBattle() {
                     {frame.id <= 2 ? (
                       // クイズフレーム（1番目と2番目）
                       <>
-                        <View style={[styles.bugPreview, isSmallScreen && styles.bugPreviewSmall]}>
+                        <View style={styles.bugPreview}>
                           <Image
                             source={BUG_IMAGES[frame.id === 1 ? 'kabuto' : 'kuwagata']}
                             style={{ width: '100%', height: '100%' }}
@@ -1831,7 +1894,6 @@ export default function BugBattle() {
                               style={[
                                 styles.letterSlot,
                                 slot ? styles.filledSlot : null,
-                                isSmallScreen && styles.letterSlotSmall,
                                 frame.id === 2 && {
                                   borderColor: '#4169E1',
                                   backgroundColor: 'rgba(65, 105, 225, 0.08)',
@@ -1841,7 +1903,6 @@ export default function BugBattle() {
                               {slot && (
                                 <Text style={[
                                   styles.letterSlotText,
-                                  isSmallScreen && styles.letterSlotTextSmall,
                                   frame.id === 2 && { color: '#4169E1' }
                                 ]}>
                                   {slot}
@@ -1856,16 +1917,12 @@ export default function BugBattle() {
                               key={`available-${index}`}
                               style={[
                                 styles.availableLetter,
-                                isSmallScreen && styles.availableLetterSmall,
                                 frame.id === 2 && { backgroundColor: '#4169E1' }
                               ]}
                               onPress={() => handleLetterPress(frameIndex, letter)}
                               activeOpacity={0.7}
                             >
-                              <Text style={[
-                                styles.availableLetterText,
-                                isSmallScreen && styles.availableLetterTextSmall
-                              ]}>
+                              <Text style={styles.availableLetterText}>
                                 {letter}
                               </Text>
                             </TouchableOpacity>
@@ -1952,7 +2009,7 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    height: isSmallScreen ? 120 : 300, // 小画面のみ高さを120pxに変更
+    height: isSmallScreen ? 120 : 300,
     zIndex: 100,
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
     borderTopLeftRadius: 30,
@@ -1962,21 +2019,21 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: -5 },
     shadowOpacity: 0.2,
     shadowRadius: 8,
-    padding: isSmallScreen ? 4 : 20, // 小画面のみパディングを調整
+    padding: isSmallScreen ? 4 : 30,
   } as ViewStyle,
   framesContainer: {
     flexDirection: 'row',
     justifyContent: 'space-around',
-    padding: 10,
+    padding: isSmallScreen ? 2 : 10,
     height: '100%',
-    gap: 10,
+    gap: isSmallScreen ? 1 : 3,
   } as ViewStyle,
   frame: {
     width: '22%',
     height: '100%',
     backgroundColor: 'rgba(255, 255, 255, 0.98)',
     borderRadius: 20,
-    padding: 15,
+    padding: isSmallScreen ? 10 : 20,
     borderWidth: 2,
     borderColor: '#4a90e2',
     justifyContent: 'flex-start',
@@ -1993,14 +2050,14 @@ const styles = StyleSheet.create({
     height: '100%',
     justifyContent: 'flex-start',
     alignItems: 'center',
-    paddingTop: 10,
+    paddingTop: 0,
   } as ViewStyle,
   bugPreview: {
     position: 'absolute',
-    top: 10,
-    right: 10,
-    width: isSmallScreen ? 30 : 60, // サイズを調整
-    height: isSmallScreen ? 30 : 60,
+    top: 2,
+    right: 2,
+    width: isSmallScreen ? 40 : 70,
+    height: isSmallScreen ? 40 : 70,
     opacity: 0.95,
     transform: [{ rotate: '5deg' }, { scale: 0.9 }],
     shadowColor: '#000',
@@ -2009,15 +2066,10 @@ const styles = StyleSheet.create({
     shadowRadius: 3,
     elevation: 3,
   } as ViewStyle,
-  bugPreviewSmall: {
-    width: 40,
-    height: 40,
-    transform: [{ rotate: '5deg' }, { scale: 0.9 }], // 回転と縮小を組み合わせて自然な見た目に
-  } as ViewStyle,
   bugPreviewImage: {
     width: '100%',
     height: '100%',
-    transform: [{ scale: 1.1 }], // 画像を少し大きくして見やすく
+    transform: [{ scale: 1.1 }],
   } as ImageStyle,
   slotsContainer: {
     flexDirection: 'row',
@@ -2029,11 +2081,11 @@ const styles = StyleSheet.create({
     gap: isSmallScreen ? 2 : 6,
   } as ViewStyle,
   letterSlot: {
-    width: isSmallScreen ? 28 : 60, // サイズを調整
-    height: isSmallScreen ? 28 : 60,
+    width: isSmallScreen ? 28 : 55,
+    height: isSmallScreen ? 28 : 55,
     borderWidth: 2,
     borderColor: '#8B4513',
-    borderRadius: 12,
+    borderRadius: isSmallScreen ? 6 : 12,
     margin: isSmallScreen ? 1 : 2,
     justifyContent: 'center',
     alignItems: 'center',
@@ -2050,7 +2102,7 @@ const styles = StyleSheet.create({
   } as ViewStyle,
   letterSlotText: {
     color: '#8B4513',
-    fontSize: isSmallScreen ? 16 : 42, // フォントサイズを調整
+    fontSize: isSmallScreen ? 22 : 38,
     fontWeight: 'bold',
     textShadowColor: 'rgba(0, 0, 0, 0.2)',
     textShadowOffset: { width: 1, height: 1 },
@@ -2063,7 +2115,7 @@ const styles = StyleSheet.create({
     padding: isSmallScreen ? 2 : 6,
     marginTop: isSmallScreen ? 4 : 8,
     width: '100%',
-    minHeight: isSmallScreen ? 40 : 60,
+    minHeight: isSmallScreen ? 30 : 60,
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
     borderRadius: 15,
     gap: isSmallScreen ? 2 : 4,
@@ -2074,10 +2126,10 @@ const styles = StyleSheet.create({
     elevation: 3,
   } as ViewStyle,
   availableLetter: {
-    width: isSmallScreen ? 24 : 50, // サイズを調整
-    height: isSmallScreen ? 24 : 50,
+    width: isSmallScreen ? 25 : 50,
+    height: isSmallScreen ? 25 : 50,
     backgroundColor: '#8B4513',
-    borderRadius: 12,
+    borderRadius: isSmallScreen ? 6 : 12,
     margin: isSmallScreen ? 1 : 2,
     justifyContent: 'center',
     alignItems: 'center',
@@ -2090,34 +2142,8 @@ const styles = StyleSheet.create({
   } as ViewStyle,
   availableLetterText: {
     color: 'white',
-    fontSize: isSmallScreen ? 14 : 36, // フォントサイズを調整
+    fontSize: isSmallScreen ? 20 : 32,
     fontWeight: 'bold',
-    textShadowColor: 'rgba(0, 0, 0, 0.2)',
-    textShadowOffset: { width: 1, height: 1 },
-    textShadowRadius: 2,
-  } as TextStyle,
-  frameSmall: {
-    padding: 10,
-    borderWidth: 2,
-  } as ViewStyle,
-  letterSlotSmall: {
-    width: 45,
-    height: 45,
-    margin: 2,
-  } as ViewStyle,
-  letterSlotTextSmall: {
-    fontSize: 28,
-  } as TextStyle,
-  availableLetterSmall: {
-    width: 45,
-    height: 45,
-    margin: 2,
-  } as ViewStyle,
-  availableLetterTextSmall: {
-    fontSize: 24,
-  } as TextStyle,
-  frameTextSmall: {
-    fontSize: 14,
   } as TextStyle,
   levelUpContainer: {
     position: 'absolute',
@@ -2155,7 +2181,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
     shadowRadius: 3.84,
-    zIndex: 100, // 1000から100に変更
+    zIndex: 100,
   } as ViewStyle,
   comboText: {
     color: 'white',
@@ -2169,13 +2195,13 @@ const styles = StyleSheet.create({
   particle: {
     position: 'absolute',
     borderRadius: 50,
-  },
+  } as ViewStyle,
   particleEmoji: {
     fontSize: 30,
-  },
+  } as TextStyle,
   enemyEmoji: {
     fontSize: 70,
-  },
+  } as TextStyle,
   bug: {
     position: 'absolute',
     justifyContent: 'center',
@@ -2188,12 +2214,12 @@ const styles = StyleSheet.create({
     zIndex: 2,
     backgroundColor: 'transparent',
     transform: [{ scale: 0.9 }],
-  },
+  } as ViewStyle,
   bugImage: {
     width: '100%',
     height: '100%',
     transform: [{ scale: 1.1 }],
-  },
+  } as ImageStyle,
   enemy: {
     position: 'absolute',
     justifyContent: 'center',
@@ -2206,23 +2232,23 @@ const styles = StyleSheet.create({
     zIndex: 3,
     backgroundColor: 'transparent',
     transform: [{ scale: 0.9 }],
-  },
+  } as ViewStyle,
   enemyImage: {
     width: '100%',
     height: '100%',
     transform: [{ scale: 1.1 }],
-  },
+  } as ImageStyle,
   enemyText: {
     color: 'white',
     fontSize: isSmallScreen ? 10 : 12,
     fontWeight: 'bold',
-  },
+  } as TextStyle,
   levelText: {
     fontSize: 16,
     textAlign: 'center',
     marginBottom: 5,
     color: '#ffd54f',
-  },
+  } as TextStyle,
   battleResultContainer: {
     position: 'absolute',
     top: '20%',
@@ -2230,8 +2256,8 @@ const styles = StyleSheet.create({
     right: 0,
     alignItems: 'center',
     justifyContent: 'center',
-    zIndex: 100, // 1000から100に変更
-  },
+    zIndex: 100,
+  } as ViewStyle,
   battleResultText: {
     fontSize: 24,
     fontWeight: 'bold',
@@ -2239,39 +2265,51 @@ const styles = StyleSheet.create({
     textShadowOffset: { width: 1, height: 1 },
     textShadowRadius: 2,
   },
-  abilityButton: {
-    position: 'absolute',
-    padding: 12,
-    borderRadius: 25,
-    elevation: 5,
+  abilityButtonsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    padding: isSmallScreen ? 0 : 0,
+    marginBottom: 0,
+    backgroundColor: 'transparent',
+    height: isSmallScreen ? 20 : 30,
+    alignItems: 'center',
+  } as ViewStyle,
+  abilityButtonContainer: {
+    padding: isSmallScreen ? 4 : 8,
+    borderRadius: 10,
+    minWidth: isSmallScreen ? 80 : 100,
+    elevation: 3,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    minWidth: 100,
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+  } as ViewStyle,
+  abilityButtonContent: {
     alignItems: 'center',
-  },
-  abilityButtonText: {
+    justifyContent: 'center',
+  } as ViewStyle,
+  abilityButtonLabel: {
     color: 'white',
-    fontSize: 16,
+    fontSize: isSmallScreen ? 12 : 14,
     fontWeight: 'bold',
-  },
-  abilityCooldown: {
+    textAlign: 'center',
+  } as TextStyle,
+  abilityCooldownOverlay: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
     bottom: 0,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    borderRadius: 25,
+    borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  abilityCooldownText: {
+  } as ViewStyle,
+  abilityCooldownLabel: {
     color: 'white',
-    fontSize: 12,
+    fontSize: isSmallScreen ? 10 : 12,
     fontWeight: 'bold',
-  },
+  } as TextStyle,
   gameHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -2328,11 +2366,6 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#333',
   } as TextStyle,
-  frameText: {
-    fontSize: 16,
-    textAlign: 'center',
-    color: '#333',
-  } as TextStyle,
   tower: {
     position: 'absolute',
     width: 100,
@@ -2356,18 +2389,18 @@ const styles = StyleSheet.create({
     borderRadius: isSmallScreen ? 9 : 11,
     borderWidth: 2,
     borderColor: '#888',
-    marginTop: isSmallScreen ? 8 : 12, // HPバーの位置を下に移動
+    marginTop: isSmallScreen ? 8 : 12,
     justifyContent: 'center',
     alignItems: 'center',
     overflow: 'hidden',
-  },
+  } as ViewStyle,
   hpBarImproved: {
     position: 'absolute',
     left: 0,
     top: 0,
     height: '100%',
     borderRadius: 11,
-  },
+  } as ViewStyle,
   hpBarText: {
     color: '#222',
     fontWeight: 'bold',
@@ -2425,7 +2458,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderRadius: 24,
     marginTop: 10,
-  },
+  } as ViewStyle,
   retryButtonText: {
     color: '#fff',
     fontSize: 18,
@@ -2451,9 +2484,9 @@ const styles = StyleSheet.create({
     opacity: 0.5,
   } as ImageStyle,
   cooldownTimerContainer: {
-    width: '90%',
+    width: '80%',
     alignItems: 'center',
-    marginTop: isSmallScreen ? 8 : 15,
+    marginTop: isSmallScreen ? 0 : 0,
   } as ViewStyle,
   cooldownTimerBackground: {
     width: '100%',

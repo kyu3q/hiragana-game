@@ -175,7 +175,7 @@ const DIFFICULTY_LEVELS: Difficulty[] = [
 ];
 
 // 敵の出現間隔（ミリ秒）
-const ENEMY_SPAWN_INTERVAL = 5000; // 5秒ごとに敵の出現を試みる
+const ENEMY_SPAWN_INTERVAL = 3500; // 3.5秒ごとに敵の出現を試みる
 
 // 1枠分の新しい問題を生成する関数
 const generateSingleQuestion = (usedIndices: number[], currentWordList: string[]): { question: string; letters: string[]; slots: (string | null)[]; usedIndex: number } => {
@@ -272,8 +272,8 @@ export default function BugBattle() {
   const [frames, setFrames] = useState<Frame[]>([
     { id: 1, question: null, letters: [], slots: [], cooldown: 0, lastUsed: 0 },
     { id: 2, question: null, letters: [], slots: [], cooldown: 0, lastUsed: 0 },
-    { id: 3, question: null, letters: [], slots: [], cooldown: 5000, lastUsed: 0 }, // 5秒クールダウン
-    { id: 4, question: null, letters: [], slots: [], cooldown: 7000, lastUsed: 0 }, // 7秒クールダウン
+    { id: 3, question: null, letters: [], slots: [], cooldown: 6000, lastUsed: 0 }, // 6秒クールダウン
+    { id: 4, question: null, letters: [], slots: [], cooldown: 8000, lastUsed: 0 }, // 8秒クールダウン
   ]);
   const [progressToNextLevel, setProgressToNextLevel] = useState(0);
   const [showScoreAnimation, setShowScoreAnimation] = useState(false);
@@ -329,7 +329,7 @@ export default function BugBattle() {
   const towerStyle = {
     position: 'absolute',
     width: isSmallScreen ? 80 : 100,
-    height: isSmallScreen ? 240 : 300,
+    height: isSmallScreen ? 200 : 280, // タワーの高さを調整
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 2,
@@ -671,7 +671,7 @@ export default function BugBattle() {
 
   // 敵の生成
   const spawnEnemy = async () => {
-    if (isGameOverScreen || isGameClearScreen) return;
+    if (isGameOverScreen || isGameClearScreen) return; // ゲームクリア時も敵の生成を停止
     const difficulty = getCurrentDifficulty();
     const currentEnemyCount = enemiesRef.current.length;
     const maxEnemies = 5;
@@ -693,16 +693,16 @@ export default function BugBattle() {
       id: enemyIdRef.current,
       type: enemyType,
       x: 150,
-      y: isSmallScreen ? 170 : 270, // より上に移動
+      y: isSmallScreen ? 170 : 250,
       targetX: 0,
       targetY: 0,
-      speed: difficulty.enemySpeed * 1.5,
+      speed: difficulty.enemySpeed * 2.0, // 1.5から2.0に増加
       rotation: new Animated.Value(0),
       scale: new Animated.Value(1),
-      hp: 40,
-      maxHp: 40,
-      attack: 8,
-      defense: 5,
+      hp: 100, // 60から100に増加
+      maxHp: 100, // 60から100に増加
+      attack: 18, // 12から18に増加
+      defense: 12, // 8から12に増加
       isPoisoned: false,
       poisonTimer: null,
       poisonDamage: 0,
@@ -871,9 +871,13 @@ export default function BugBattle() {
             bug.hp <= 0 ? 'failure' : 'success'
           );
           playSound(soundsRef.current.collision);
-          const difficulty = getCurrentDifficulty();
-          const penalty = Math.floor(5 * difficulty.scoreMultiplier);
-          setScore(prev => Math.max(0, prev - penalty));
+
+          // 敵を倒した場合のみスコアを加算
+          if (enemy.hp <= 0) {
+            const difficulty = getCurrentDifficulty();
+            const scoreGain = Math.floor(10 * difficulty.scoreMultiplier);
+            setScore(prev => prev + scoreGain);
+          }
 
           if (bug.hp <= 0) {
             animateBugDisappearance(bug);
@@ -903,12 +907,12 @@ export default function BugBattle() {
     Animated.parallel([
       Animated.timing(bug.scale, {
         toValue: 0,
-        duration: 300,
+        duration: 150, // 300から150に短縮
         useNativeDriver: true,
       }),
       Animated.timing(bug.opacity, {
         toValue: 0,
-        duration: 300,
+        duration: 150, // 300から150に短縮
         useNativeDriver: true,
       }),
     ]).start(() => {
@@ -924,7 +928,7 @@ export default function BugBattle() {
     Animated.parallel([
       Animated.timing(enemy.scale, {
         toValue: 0,
-        duration: 300,
+        duration: 150, // 300から150に短縮
         useNativeDriver: true,
       }),
     ]).start(() => {
@@ -940,7 +944,7 @@ export default function BugBattle() {
     setIsAttacking(prev => ({ ...prev, [id]: true }));
     setTimeout(() => {
       setIsAttacking(prev => ({ ...prev, [id]: false }));
-    }, 500);
+    }, 200); // 500から200に短縮
   };
 
   const handleRetry = () => {
@@ -958,39 +962,107 @@ export default function BugBattle() {
       timerIntervalRef.current = null;
     }
 
-    // 状態をリセット
-    setBugs([]);
+    // 敵と味方をクリア
     setEnemies([]);
-    setScore(0);
-    setGameOver(false);
-    setCurrentLevel(1);
-    setConsecutiveCorrect(0);
-    setGameTime(0);
-    setIsGameOverScreen(false);
-    setIsGameClearScreen(false);
-    setPlayerTower({ hp: 100, maxHp: 100, x: -100, y: isSmallScreen ? screenHeight - 350 : screenHeight - 400 });
-    setEnemyTower({ hp: 100, maxHp: 100, x: screenWidth - 50, y: isSmallScreen ? screenHeight - 350 : screenHeight - 400 });
-    
-    // 問題を再生成
-    generateQuestion();
-    
-    // ゲームループを再開
-    setTimeout(() => {
-      startGameLoop();
-      // 初期の味方を生成
-      spawnBug(FRAME_BUG_TYPES[1]);
-    }, 100);
+    setBugs([]);
+
+    // initializeGameを使用して完全に初期化
+    initializeGame();
   };
 
   const handleSwitchKana = () => {
+    // 既存のインターバルをクリア
+    if (gameLoopRef.current) {
+      clearInterval(gameLoopRef.current);
+      gameLoopRef.current = null;
+    }
+    if (enemySpawnIntervalRef.current) {
+      clearInterval(enemySpawnIntervalRef.current);
+      enemySpawnIntervalRef.current = null;
+    }
+    if (timerIntervalRef.current) {
+      clearInterval(timerIntervalRef.current);
+      timerIntervalRef.current = null;
+    }
+
+    // 敵と味方をクリア
+    setEnemies([]);
+    setBugs([]);
+
+    // ゲーム状態をリセット
+    setIsGameOverScreen(false);
+    setIsGameClearScreen(false);
+    setGameOver(false);
+    setScore(0);
+    setCurrentLevel(1);
+    setConsecutiveCorrect(0);
+    setGameTime(0);
+
     setIsHiragana(prev => {
       const next = !prev;
-      setTimeout(() => {
+      // 状態更新後にゲームを初期化
+      requestAnimationFrame(() => {
         initializeGame();
-      }, 0);
+      });
       return next;
     });
   };
+
+  // コンポーネントのアンマウント時にクリーンアップ
+  useEffect(() => {
+    return () => {
+      // インターバルをクリア
+      if (gameLoopRef.current) {
+        clearInterval(gameLoopRef.current);
+        gameLoopRef.current = null;
+      }
+      if (enemySpawnIntervalRef.current) {
+        clearInterval(enemySpawnIntervalRef.current);
+        enemySpawnIntervalRef.current = null;
+      }
+      if (timerIntervalRef.current) {
+        clearInterval(timerIntervalRef.current);
+        timerIntervalRef.current = null;
+      }
+
+      // ゲーム状態をリセット
+      setEnemies([]);
+      setBugs([]);
+      setIsGameOverScreen(false);
+      setIsGameClearScreen(false);
+      setGameOver(false);
+      setScore(0);
+      setCurrentLevel(1);
+      setConsecutiveCorrect(0);
+      setGameTime(0);
+    };
+  }, []);
+
+  // ゲームメニューの表示状態が変更されたときの処理
+  useEffect(() => {
+    if (!isSettingsVisible) {
+      // メニューが閉じられたときにゲーム状態を確認
+      if (isGameOverScreen || isGameClearScreen) {
+        // インターバルをクリア
+        if (gameLoopRef.current) {
+          clearInterval(gameLoopRef.current);
+          gameLoopRef.current = null;
+        }
+        if (enemySpawnIntervalRef.current) {
+          clearInterval(enemySpawnIntervalRef.current);
+          enemySpawnIntervalRef.current = null;
+        }
+        if (timerIntervalRef.current) {
+          clearInterval(timerIntervalRef.current);
+          timerIntervalRef.current = null;
+        }
+
+        // 敵と味方をクリア
+        setEnemies([]);
+        setBugs([]);
+      }
+    }
+  }, [isSettingsVisible]);
 
   // 虫の生成
   const spawnBug = (bugType: BugType) => {
@@ -1004,7 +1076,7 @@ export default function BugBattle() {
       y: isSmallScreen ? 170 : 250, // より上に移動
       targetX: 0,
       targetY: 0,
-      speed: difficulty.bugSpeed * 2.0,
+      speed: difficulty.bugSpeed * 2.5, // 2.0から2.5に増加
       rotation: new Animated.Value(0),
       scale: new Animated.Value(1),
       opacity: new Animated.Value(1),
@@ -1063,7 +1135,7 @@ export default function BugBattle() {
         }
       }
 
-      // 3秒後に新しい問題を生成
+      // 5秒後に新しい問題を生成
       setTimeout(() => {
         const { question, letters, slots: newSlots, usedIndex } = generateSingleQuestion(usedIndices, getWordLists(isHiragana)[1]);
         setFrames(prevFrames => prevFrames.map((frame, idx) =>
@@ -1071,7 +1143,7 @@ export default function BugBattle() {
             ? { ...frame, question, letters, slots: newSlots }
             : frame
         ));
-      }, 3000);
+      }, 5000);
 
       checkLevelUp();
     } else {
@@ -1317,9 +1389,23 @@ export default function BugBattle() {
       setPlayerTower(prev => {
         const newHp = Math.max(0, prev.hp - damage);
         if (newHp <= 0) {
+          // ゲームクリア時の処理
           setIsGameClearScreen(true);
           setIsGameOverScreen(false);
-          // ゲームクリア時に味方と敵を消去
+          // インターバルをクリア
+          if (gameLoopRef.current) {
+            clearInterval(gameLoopRef.current);
+            gameLoopRef.current = null;
+          }
+          if (enemySpawnIntervalRef.current) {
+            clearInterval(enemySpawnIntervalRef.current);
+            enemySpawnIntervalRef.current = null;
+          }
+          if (timerIntervalRef.current) {
+            clearInterval(timerIntervalRef.current);
+            timerIntervalRef.current = null;
+          }
+          // 味方と敵を消去
           setBugs([]);
           setEnemies([]);
         }
@@ -1331,9 +1417,23 @@ export default function BugBattle() {
       setEnemyTower(prev => {
         const newHp = Math.max(0, prev.hp - damage);
         if (newHp <= 0) {
+          // ゲームオーバー時の処理
           setIsGameOverScreen(true);
           setIsGameClearScreen(false);
-          // ゲームオーバー時に味方と敵を消去
+          // インターバルをクリア
+          if (gameLoopRef.current) {
+            clearInterval(gameLoopRef.current);
+            gameLoopRef.current = null;
+          }
+          if (enemySpawnIntervalRef.current) {
+            clearInterval(enemySpawnIntervalRef.current);
+            enemySpawnIntervalRef.current = null;
+          }
+          if (timerIntervalRef.current) {
+            clearInterval(timerIntervalRef.current);
+            timerIntervalRef.current = null;
+          }
+          // 味方と敵を消去
           setBugs([]);
           setEnemies([]);
         }
@@ -1681,7 +1781,7 @@ export default function BugBattle() {
             bottom: 0, 
             left: 0, 
             right: 0, 
-            height: isSmallScreen ? 100 : 300,
+            height: isSmallScreen ? 120 : 300, // 小画面のみ高さを120pxに変更
             zIndex: 100,
             backgroundColor: 'rgba(255, 255, 255, 0.95)',
             borderTopLeftRadius: 30,
@@ -1691,9 +1791,11 @@ export default function BugBattle() {
             shadowOffset: { width: 0, height: -5 },
             shadowOpacity: 0.2,
             shadowRadius: 8,
-            padding: isSmallScreen ? 10 : 20,
+            padding: isSmallScreen ? 4 : 20, // 小画面のみパディングを調整
           }]}>
-            <View style={styles.framesContainer}>
+            <View style={[styles.framesContainer, {
+              gap: isSmallScreen ? 2 : 10, // 小画面のみフレーム間の間隔を調整
+            }]}>
               {frames.map((frame, frameIndex) => (
                 <View
                   key={frame.id}
@@ -1704,6 +1806,7 @@ export default function BugBattle() {
                       borderColor: BUG_COLORS[frame.id === 1 ? 'kabuto' : frame.id === 2 ? 'kuwagata' : frame.id === 3 ? 'gohon' : 'caucasus'],
                       width: frame.id <= 2 ? '28%' : '16%',
                       aspectRatio: frame.id <= 2 ? undefined : 1,
+                      padding: isSmallScreen ? 4 : 15, // 小画面のみフレーム内のパディングを調整
                     }
                   ]}
                 >
@@ -1849,7 +1952,7 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    height: isSmallScreen ? 100 : 300,
+    height: isSmallScreen ? 120 : 300, // 小画面のみ高さを120pxに変更
     zIndex: 100,
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
     borderTopLeftRadius: 30,
@@ -1859,7 +1962,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: -5 },
     shadowOpacity: 0.2,
     shadowRadius: 8,
-    padding: isSmallScreen ? 10 : 20,
+    padding: isSmallScreen ? 4 : 20, // 小画面のみパディングを調整
   } as ViewStyle,
   framesContainer: {
     flexDirection: 'row',
@@ -1896,10 +1999,10 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 10,
     right: 10,
-    width: 60,
-    height: 60,
+    width: isSmallScreen ? 30 : 60, // サイズを調整
+    height: isSmallScreen ? 30 : 60,
     opacity: 0.95,
-    transform: [{ rotate: '5deg' }, { scale: 0.9 }], // 回転と縮小を組み合わせて自然な見た目に
+    transform: [{ rotate: '5deg' }, { scale: 0.9 }],
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.2,
@@ -1921,13 +2024,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     flexWrap: 'wrap',
     width: '100%',
-    paddingHorizontal: 8,
-    marginTop: 8,
-    gap: 6,
+    paddingHorizontal: isSmallScreen ? 4 : 8,
+    marginTop: isSmallScreen ? 4 : 8,
+    gap: isSmallScreen ? 2 : 6,
   } as ViewStyle,
   letterSlot: {
-    width: isSmallScreen ? 32 : 60,
-    height: isSmallScreen ? 32 : 60,
+    width: isSmallScreen ? 28 : 60, // サイズを調整
+    height: isSmallScreen ? 28 : 60,
     borderWidth: 2,
     borderColor: '#8B4513',
     borderRadius: 12,
@@ -1947,7 +2050,7 @@ const styles = StyleSheet.create({
   } as ViewStyle,
   letterSlotText: {
     color: '#8B4513',
-    fontSize: isSmallScreen ? 20 : 42,
+    fontSize: isSmallScreen ? 16 : 42, // フォントサイズを調整
     fontWeight: 'bold',
     textShadowColor: 'rgba(0, 0, 0, 0.2)',
     textShadowOffset: { width: 1, height: 1 },
@@ -1957,13 +2060,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'center',
-    padding: 6,
-    marginTop: 8,
+    padding: isSmallScreen ? 2 : 6,
+    marginTop: isSmallScreen ? 4 : 8,
     width: '100%',
-    minHeight: 60,
+    minHeight: isSmallScreen ? 40 : 60,
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
     borderRadius: 15,
-    gap: 4,
+    gap: isSmallScreen ? 2 : 4,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
@@ -1971,8 +2074,8 @@ const styles = StyleSheet.create({
     elevation: 3,
   } as ViewStyle,
   availableLetter: {
-    width: isSmallScreen ? 28 : 50,
-    height: isSmallScreen ? 28 : 50,
+    width: isSmallScreen ? 24 : 50, // サイズを調整
+    height: isSmallScreen ? 24 : 50,
     backgroundColor: '#8B4513',
     borderRadius: 12,
     margin: isSmallScreen ? 1 : 2,
@@ -1987,7 +2090,7 @@ const styles = StyleSheet.create({
   } as ViewStyle,
   availableLetterText: {
     color: 'white',
-    fontSize: isSmallScreen ? 18 : 36,
+    fontSize: isSmallScreen ? 14 : 36, // フォントサイズを調整
     fontWeight: 'bold',
     textShadowColor: 'rgba(0, 0, 0, 0.2)',
     textShadowOffset: { width: 1, height: 1 },
@@ -2253,7 +2356,7 @@ const styles = StyleSheet.create({
     borderRadius: isSmallScreen ? 9 : 11,
     borderWidth: 2,
     borderColor: '#888',
-    marginTop: isSmallScreen ? 4 : 8,
+    marginTop: isSmallScreen ? 8 : 12, // HPバーの位置を下に移動
     justifyContent: 'center',
     alignItems: 'center',
     overflow: 'hidden',

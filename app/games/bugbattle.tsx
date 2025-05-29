@@ -25,13 +25,6 @@ const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 // iPadの画面サイズを考慮して、画面の向きに関係なく判定
 const isSmallScreen = Math.min(screenWidth, screenHeight) < 768; // 768ptを基準に
 
-// 敵の絵文字マッピング
-const ENEMY_EMOJIS = {
-  beetle: '🪲',
-  stag: '🦗',
-  mantis: '🦗',
-} as const;
-
 // 虫の画像マッピング
 const BUG_IMAGES = {
   kabuto: require('../../assets/images/bugbattle/bug1.png'),      // カブトムシ
@@ -49,21 +42,21 @@ const ENEMY_IMAGES = {
 
 // 虫のサイズ定数
 const BUG_SIZES = {
-  kabuto: isSmallScreen ? 60 : 100,     // カブトムシのサイズ
-  kuwagata: isSmallScreen ? 60 : 100,   // クワガタのサイズ
-  gohon: isSmallScreen ? 60 : 100,      // ゴホンヅノカブトのサイズ
-  caucasus: isSmallScreen ? 60 : 100,   // コーカサスオオカブトのサイズ
+  kabuto: isSmallScreen ? 50 : 80,     // カブトムシのサイズ
+  kuwagata: isSmallScreen ? 50 : 80,   // クワガタのサイズ
+  gohon: isSmallScreen ? 50 : 80,      // ゴホンヅノカブトのサイズ
+  caucasus: isSmallScreen ? 50 : 80,   // コーカサスオオカブトのサイズ
 } as const;
 
 // 敵のサイズ定数
 const ENEMY_SIZES = {
-  beetle: isSmallScreen ? 55 : 100,    // カブトムシのサイズ
-  stag: isSmallScreen ? 55 : 100,      // クワガタのサイズ
-  mantis: isSmallScreen ? 55 : 100,    // カマキリのサイズ
+  beetle: isSmallScreen ? 50 : 80,    // カブトムシのサイズ
+  stag: isSmallScreen ? 50 : 80,      // クワガタのサイズ
+  mantis: isSmallScreen ? 50 : 80,    // カマキリのサイズ
 } as const;
 
 // 虫の種類
-type BugType = 'kabuto' | 'kuwagata' | 'gohon' | 'caucasus';
+type BugType = keyof typeof BUG_IMAGES;
 // 敵の種類
 type EnemyType = keyof typeof ENEMY_IMAGES;
 
@@ -145,7 +138,7 @@ interface Difficulty {
   scoreMultiplier: number;
 }
 
-// パーティクルの型定義
+// パーティクル
 interface Particle {
   id: number;
   x: number;
@@ -158,12 +151,10 @@ interface Particle {
   rotation: Animated.Value;
 }
 
-// タワーの型定義を追加
+// タワーの型定義
 interface Tower {
   hp: number;
   maxHp: number;
-  x: number;
-  y: number;
 }
 
 const DIFFICULTY_LEVELS: Difficulty[] = [
@@ -310,32 +301,17 @@ export default function BugBattle() {
     abilityButterfly: null,
     abilityFirefly: null,
   });
-
-  // タワーの位置を小画面用に調整
+  
   const [playerTower, setPlayerTower] = useState<Tower>({
     hp: 100,
     maxHp: 100,
-    x: -100,
-    y: isSmallScreen ? screenHeight - 350 : screenHeight - 400,
   });
   const [enemyTower, setEnemyTower] = useState<Tower>({
     hp: 100,
     maxHp: 100,
-    x: screenWidth - 50,
-    y: isSmallScreen ? screenHeight - 350 : screenHeight - 400,
   });
 
-  // タワーのスタイルを調整
-  const towerStyle = {
-    position: 'absolute',
-    width: isSmallScreen ? 80 : 100,
-    height: isSmallScreen ? 200 : 280, // タワーの高さを調整
-    justifyContent: 'center',
-    alignItems: 'center',
-    zIndex: 2,
-  } as ViewStyle;
-
-  // タワーのアニメーション用stateを追加
+  // タワーのアニメーション用state
   const [playerTowerShake] = useState(new Animated.Value(0));
   const [enemyTowerShake] = useState(new Animated.Value(0));
   const [playerTowerHit, setPlayerTowerHit] = useState(false);
@@ -431,7 +407,7 @@ export default function BugBattle() {
     });
   };
 
-  // 音声の初期化を改善
+  // 音声の初期化
   useEffect(() => {
     const loadSounds = async () => {
       try {
@@ -476,7 +452,7 @@ export default function BugBattle() {
 
     loadSounds();
 
-    // クリーンアップ関数を改善
+    // クリーンアップ
     return () => {
       const cleanup = async () => {
         try {
@@ -502,7 +478,7 @@ export default function BugBattle() {
     };
   }, []);
 
-  // 音声再生関数を改善
+  // 音声再生
   const playSound = async (sound: Audio.Sound | null) => {
     try {
       if (!sound) {
@@ -640,8 +616,8 @@ export default function BugBattle() {
     setTimeout(() => {
       spawnBug(FRAME_BUG_TYPES[1]);
     }, 100);
-    setPlayerTower({ hp: 100, maxHp: 100, x: -100, y: isSmallScreen ? screenHeight - 350 : screenHeight - 400 });
-    setEnemyTower({ hp: 100, maxHp: 100, x: screenWidth - 50, y: isSmallScreen ? screenHeight - 350 : screenHeight - 400 });
+    setPlayerTower({ hp: 100, maxHp: 100 });
+    setEnemyTower({ hp: 100, maxHp: 100 });
     setIsGameOverScreen(false);
     setIsGameClearScreen(false);
     setGameTime(0);
@@ -686,14 +662,14 @@ export default function BugBattle() {
 
     await playSound(soundsRef.current.enemySpawn);
 
-    const enemyTypes = Object.keys(ENEMY_EMOJIS) as EnemyType[];
+    const enemyTypes = Object.keys(ENEMY_IMAGES) as EnemyType[];
     const enemyType = enemyTypes[Math.floor(Math.random() * enemyTypes.length)];
     enemyIdRef.current += 1;
     const newEnemy: Enemy = {
       id: enemyIdRef.current,
       type: enemyType,
-      x: 150,
-      y: isSmallScreen ? 150 : 250,
+      x: isSmallScreen ? 50 : 150,
+      y: isSmallScreen ? 150 : 280,
       targetX: 0,
       targetY: 0,
       speed: difficulty.enemySpeed * 2.0,
@@ -1072,8 +1048,8 @@ export default function BugBattle() {
     const newBug: Bug = {
       id: bugIdRef.current,
       type: bugType,
-      x: screenWidth - 200,
-      y: isSmallScreen ? 150 : 250,
+      x: isSmallScreen ? screenWidth - 200 :  screenWidth - 200 ,
+      y: isSmallScreen ? 150 : 280,
       targetX: 0,
       targetY: 0,
       speed: difficulty.bugSpeed * 2.5,
@@ -1442,7 +1418,7 @@ export default function BugBattle() {
     });
   };
 
-  // スコア更新時の処理を修正
+  // スコア更新時の処理
   const updateScore = (newScore: number) => {
     setScore(prev => {
       const updatedScore = prev + newScore;
@@ -1455,7 +1431,7 @@ export default function BugBattle() {
     });
   };
 
-  // タワーのHPを更新する関数を修正
+  // タワーのHPを更新する関数
   const updateTowerHp = (isPlayer: boolean, damage: number) => {
     if (isPlayer) {
       setPlayerTower(prev => {
@@ -1563,7 +1539,7 @@ export default function BugBattle() {
     return () => clearInterval(interval);
   }, [frames]);
 
-  // クールダウンフレームのクリック処理を修正
+  // クールダウンフレームのクリック処理
   const handleCooldownFrameClick = (frameIndex: number) => {
     if (isGameOverScreen || isGameClearScreen) return;
     const now = Date.now();
@@ -1624,13 +1600,6 @@ export default function BugBattle() {
               <Text style={styles.winnerText}>
                 😢 ゲームオーバー
               </Text>
-              <View style={styles.resultTimes}>
-                <View style={styles.resultTimeRow}>
-                  <Text style={[styles.timeText, styles.parentTime]}>
-                    スコア: {score}
-                  </Text>
-                </View>
-              </View>
             </View>
           </View>
         )}
@@ -1663,13 +1632,6 @@ export default function BugBattle() {
               >
                 🎉 ゲームクリア！
               </Animated.Text>
-              <View style={styles.resultTimes}>
-                <View style={styles.resultTimeRow}>
-                  <Text style={[styles.timeText, styles.parentTime]}>
-                    スコア: {score}
-                  </Text>
-                </View>
-              </View>
             </View>
           </View>
         )}
@@ -1677,8 +1639,8 @@ export default function BugBattle() {
           <View style={styles.gameArea}>
             <View style={styles.battleArea}>
               {/* 敵のタワー（左側） */}
-              <View style={[styles.tower, { left: isSmallScreen ? 20 : 40, top: isSmallScreen ? 20 : 80 }]}> 
-                <View style={[styles.hpBarOuter, { marginBottom: isSmallScreen ? 2 : 8 }]}>
+              <View style={[styles.tower, { left: isSmallScreen ? 0 : 40 }]}> 
+                <View style={styles.hpBarOuter}>
                   <View style={[styles.hpBarImproved, {
                     width: `${(playerTower.hp / playerTower.maxHp) * 100}%`,
                     backgroundColor: playerTower.hp > playerTower.maxHp * 0.3 ? '#4CAF50' : '#F44336'
@@ -1691,13 +1653,13 @@ export default function BugBattle() {
                   borderRadius: 20,
                 }}>
                   <View style={styles.towerEmojiContainer}>
-                    <EnemyCastleIcon width={isSmallScreen ? 80 : 120} height={isSmallScreen ? 180 : 280} />
+                    <EnemyCastleIcon width={isSmallScreen ? 80 : 120} height={isSmallScreen ? 130 : 280} />
                   </View>
                 </Animated.View>
               </View>
               {/* 味方のタワー（右側） */}
-              <View style={[styles.tower, { right: isSmallScreen ? 20 : 40, top: isSmallScreen ? 20 : 80 }]}> 
-                <View style={[styles.hpBarOuter, { marginBottom: isSmallScreen ? 2 : 8 }]}>
+              <View style={[styles.tower, { right: isSmallScreen ? 0 : 40 }]}> 
+                <View style={styles.hpBarOuter}>
                   <View style={[styles.hpBarImproved, {
                     width: `${(enemyTower.hp / enemyTower.maxHp) * 100}%`,
                     backgroundColor: enemyTower.hp > enemyTower.maxHp * 0.3 ? '#F44336' : '#4CAF50'
@@ -1710,7 +1672,7 @@ export default function BugBattle() {
                   borderRadius: 20,
                 }}>
                   <View style={styles.towerEmojiContainer}>
-                    <BugCastleIcon width={isSmallScreen ? 80 : 120} height={isSmallScreen ? 180 : 280} />
+                    <BugCastleIcon width={isSmallScreen ? 80 : 120} height={isSmallScreen ? 130 : 280} />
                   </View>
                 </Animated.View>
               </View>
@@ -1867,16 +1829,11 @@ export default function BugBattle() {
                     styles.frame,
                     {
                       borderColor: BUG_COLORS[frame.id === 1 ? 'kabuto' : frame.id === 2 ? 'kuwagata' : frame.id === 3 ? 'gohon' : 'caucasus'],
-                      width: frame.id <= 2 ? '28%' : '16%',
-                      aspectRatio: frame.id <= 2 ? undefined : 1,
-                      padding: isSmallScreen ? 4 : 10,
+                      width: frame.id <= 2 ? '30%' : '15%'
                     }
                   ]}
                 >
-                  <View style={[
-                    styles.frameContent,
-                    frame.id <= 2 ? undefined : { justifyContent: 'center' }
-                  ]}>
+                  <View style={styles.frameContent}>
                     {frame.id <= 2 ? (
                       // クイズフレーム（1番目と2番目）
                       <>
@@ -2009,31 +1966,32 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    height: isSmallScreen ? 120 : 300,
+    height: isSmallScreen ? 120 :300,
     zIndex: 100,
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
     borderTopLeftRadius: 30,
     borderTopRightRadius: 30,
+    borderBottomLeftRadius: 15,
+    borderBottomRightRadius: 15,
     elevation: 8,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: -5 },
     shadowOpacity: 0.2,
     shadowRadius: 8,
-    padding: isSmallScreen ? 4 : 30,
+    padding: isSmallScreen ? 5 : 10,
   } as ViewStyle,
   framesContainer: {
     flexDirection: 'row',
     justifyContent: 'space-around',
-    padding: isSmallScreen ? 2 : 10,
+    padding: isSmallScreen ? 5 : 10,
     height: '100%',
-    gap: isSmallScreen ? 1 : 3,
+    gap: isSmallScreen ? 1 : 2,
   } as ViewStyle,
   frame: {
     width: '22%',
-    height: '100%',
+    height: '85%',
     backgroundColor: 'rgba(255, 255, 255, 0.98)',
     borderRadius: 20,
-    padding: isSmallScreen ? 10 : 20,
     borderWidth: 2,
     borderColor: '#4a90e2',
     justifyContent: 'flex-start',
@@ -2048,7 +2006,7 @@ const styles = StyleSheet.create({
   frameContent: {
     width: '100%',
     height: '100%',
-    justifyContent: 'flex-start',
+    justifyContent: 'center',
     alignItems: 'center',
     paddingTop: 0,
   } as ViewStyle,
@@ -2056,8 +2014,8 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 2,
     right: 2,
-    width: isSmallScreen ? 40 : 70,
-    height: isSmallScreen ? 40 : 70,
+    width: isSmallScreen ? 50 : 90,
+    height: isSmallScreen ? 50 : 90,
     opacity: 0.95,
     transform: [{ rotate: '5deg' }, { scale: 0.9 }],
     shadowColor: '#000',
@@ -2116,7 +2074,6 @@ const styles = StyleSheet.create({
     marginTop: isSmallScreen ? 4 : 8,
     width: '100%',
     minHeight: isSmallScreen ? 30 : 60,
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
     borderRadius: 15,
     gap: isSmallScreen ? 2 : 4,
     shadowColor: '#000',
@@ -2196,12 +2153,6 @@ const styles = StyleSheet.create({
     position: 'absolute',
     borderRadius: 50,
   } as ViewStyle,
-  particleEmoji: {
-    fontSize: 30,
-  } as TextStyle,
-  enemyEmoji: {
-    fontSize: 70,
-  } as TextStyle,
   bug: {
     position: 'absolute',
     justifyContent: 'center',
@@ -2347,12 +2298,6 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: 'bold',
   },
-  startScreen: {} as ViewStyle,
-  gameTitle: {} as TextStyle,
-  gameDescription: {} as TextStyle,
-  startButtonContainer: {} as ViewStyle,
-  startButton: {} as ViewStyle,
-  startButtonText: {} as TextStyle,
   scoreTopCenter: {
     position: 'absolute',
     top: 10,
@@ -2369,27 +2314,26 @@ const styles = StyleSheet.create({
   tower: {
     position: 'absolute',
     width: 100,
-    height: 300,
+    height: isSmallScreen ? 160 : 300,
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 2,
+    top: isSmallScreen ? 40 : 80,
   } as ViewStyle,
   towerEmojiContainer: {
     justifyContent: 'center',
     alignItems: 'center',
   } as ViewStyle,
-  towerEmoji: {
-    fontSize: 120,
-  } as TextStyle,
   hpBarOuter: {
     position: 'relative',
-    width: isSmallScreen ? 90 : 110,
+    width: isSmallScreen ? 60 : 110,
     height: isSmallScreen ? 18 : 22,
     backgroundColor: '#e0e0e0',
     borderRadius: isSmallScreen ? 9 : 11,
     borderWidth: 2,
     borderColor: '#888',
     marginTop: isSmallScreen ? 8 : 12,
+    marginBottom: isSmallScreen ? 8 : 12,
     justifyContent: 'center',
     alignItems: 'center',
     overflow: 'hidden',
@@ -2404,7 +2348,7 @@ const styles = StyleSheet.create({
   hpBarText: {
     color: '#222',
     fontWeight: 'bold',
-    fontSize: isSmallScreen ? 12 : 14,
+    fontSize: isSmallScreen ? 10 : 14,
     zIndex: 2,
   },
   resultsContainer: {
@@ -2445,25 +2389,6 @@ const styles = StyleSheet.create({
     fontSize: 24,
     marginRight: 10,
   },
-  timeText: {
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-  parentTime: {
-    color: '#8B4513',
-  },
-  retryButton: {
-    backgroundColor: '#4a90e2',
-    paddingHorizontal: 32,
-    paddingVertical: 12,
-    borderRadius: 24,
-    marginTop: 10,
-  } as ViewStyle,
-  retryButtonText: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
   cooldownFrame: {
     width: '100%',
     height: '100%',
@@ -2473,11 +2398,11 @@ const styles = StyleSheet.create({
   cooldownContent: {
     width: '100%',
     alignItems: 'center',
-    gap: 10,
+    gap: isSmallScreen ? 5 : 10,
   } as ViewStyle,
   cooldownBugImage: {
-    width: isSmallScreen ? 80 : 120,
-    height: isSmallScreen ? 80 : 120,
+    width: isSmallScreen ? 50 : 120,
+    height: isSmallScreen ? 50 : 120,
     opacity: 1,
   } as ImageStyle,
   cooldownBugImageDisabled: {

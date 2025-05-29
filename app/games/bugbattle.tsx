@@ -168,7 +168,7 @@ const DIFFICULTY_LEVELS: Difficulty[] = [
 ];
 
 // 敵の出現間隔（ミリ秒）
-const ENEMY_SPAWN_INTERVAL = 3500; // 3.5秒ごとに敵の出現を試みる
+const ENEMY_SPAWN_INTERVAL = 2000; // 2秒ごとに敵の出現を試みる
 
 // 1枠分の新しい問題を生成
 const generateSingleQuestion = (usedIndices: number[], currentWordList: string[]): { question: string; letters: string[]; slots: (string | null)[]; usedIndex: number } => {
@@ -226,12 +226,11 @@ export default function BugBattle() {
   const enemiesRef = useRef<Enemy[]>([]);
   const [currentQuestion, setCurrentQuestion] = useState<Question | null>(null);
   const [isHiragana, setIsHiragana] = useState(true);
-  const [score, setScore] = useState(0);
   const [gameOver, setGameOver] = useState(false);
   const [isSettingsVisible, setIsSettingsVisible] = useState(false);
   const [selectedLetters, setSelectedLetters] = useState<string[]>([]);
   const [availableLetters, setAvailableLetters] = useState<string[]>([]);
-  const gameLoopRef = useRef<NodeJS.Timeout | null>(null);
+  const gameLoopRef = useRef<number | null>(null);
   const enemySpawnIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const [currentLevel, setCurrentLevel] = useState(1);
@@ -534,26 +533,99 @@ export default function BugBattle() {
 
   // 初期化
   useEffect(() => {
+    // ゲームの初期化
     initializeGame();
     startGameLoop();
+
+    // クリーンアップ関数
     return () => {
+      // 全てのインターバルをクリア
       if (gameLoopRef.current) {
-        clearInterval(gameLoopRef.current);
+        cancelAnimationFrame(gameLoopRef.current);
+        gameLoopRef.current = null;
       }
+      if (enemySpawnIntervalRef.current) {
+        clearInterval(enemySpawnIntervalRef.current);
+        enemySpawnIntervalRef.current = null;
+      }
+      if (timerIntervalRef.current) {
+        clearInterval(timerIntervalRef.current);
+        timerIntervalRef.current = null;
+      }
+
+      // 全ての状態をリセット
+      setEnemies([]);
+      setBugs([]);
+      setGameOver(false);
+      setIsGameOverScreen(false);
+      setIsGameClearScreen(false);
+      setCurrentLevel(1);
+      setConsecutiveCorrect(0);
+      setGameTime(0);
+      setQuestionsAnswered(0);
+      setPlayerTower({ hp: 100, maxHp: 100 });
+      setEnemyTower({ hp: 100, maxHp: 100 });
+      isRetryingRef.current = false;
+      isSwitchingKanaRef.current = false;
     };
   }, []);
 
-  // 難易度の取得
-  const getCurrentDifficulty = (): Difficulty => {
-    return DIFFICULTY_LEVELS[currentLevel - 1] || DIFFICULTY_LEVELS[0];
+  const handleRetry = () => {
+    isRetryingRef.current = true;
+    // ゲームオーバーとゲームクリアの状態をリセット
+    setIsGameOverScreen(false);
+    setIsGameClearScreen(false);
   };
 
-  // スコアの計算
-  const calculateScore = (baseScore: number): number => {
-    const difficulty = getCurrentDifficulty();
-    const timeBonus = Math.max(1, 2 - gameTime / 60); // 時間ボーナス（最大2倍）
-    const comboBonus = Math.min(2, 1 + consecutiveCorrect * 0.1); // コンボボーナス（最大2倍）
-    return Math.floor(baseScore * difficulty.scoreMultiplier * timeBonus * comboBonus);
+  // ゲームの初期化
+  const initializeGame = () => {
+    // 両方のクイズを初期化
+    generateQuestion(0);
+    generateQuestion(1);
+    
+    // 初期の味方を生成
+    setTimeout(() => {
+      spawnBug(FRAME_BUG_TYPES[1]);
+    }, 100);
+  };
+
+  // ゲームループの開始
+  const startGameLoop = () => {
+    // 既存のゲームループをクリア
+    if (gameLoopRef.current) {
+      cancelAnimationFrame(gameLoopRef.current);
+      gameLoopRef.current = null;
+    }
+
+    // 敵の生成インターバルを設定
+    if (enemySpawnIntervalRef.current) {
+      clearInterval(enemySpawnIntervalRef.current);
+      enemySpawnIntervalRef.current = null;
+    }
+
+    // 新しい敵生成インターバルを設定
+    enemySpawnIntervalRef.current = setInterval(() => {
+      if (!gameOver && !isGameOverScreen && !isGameClearScreen) {
+        spawnEnemy();
+      }
+    }, ENEMY_SPAWN_INTERVAL) as unknown as NodeJS.Timeout;
+
+    // 新しいゲームループを開始
+    const gameLoop = () => {
+      if (!gameOver && !isGameOverScreen && !isGameClearScreen) {
+        updateGameState();
+        gameLoopRef.current = requestAnimationFrame(gameLoop);
+      }
+    };
+
+    gameLoopRef.current = requestAnimationFrame(gameLoop);
+  };
+
+  // 難易度の取得
+  const getCurrentDifficulty = (): Difficulty => {
+    // レベル5以降はレベル5の難易度を維持
+    const levelIndex = Math.min(currentLevel - 1, 4);
+    return DIFFICULTY_LEVELS[levelIndex];
   };
 
   // レベルアップ演出
@@ -561,19 +633,19 @@ export default function BugBattle() {
     setShowLevelUpText(true);
     Animated.sequence([
       Animated.timing(levelUpAnimation, {
-        toValue: 1.5,
-        duration: 500,
+        toValue: isSmallScreen ? 1.3 : 1.5,
+        duration: isSmallScreen ? 400 : 500,
         useNativeDriver: true,
       }),
       Animated.timing(levelUpAnimation, {
         toValue: 1,
-        duration: 500,
+        duration: isSmallScreen ? 400 : 500,
         useNativeDriver: true,
       }),
     ]).start(() => {
       setTimeout(() => {
         setShowLevelUpText(false);
-      }, 1000);
+      }, isSmallScreen ? 200 : 300);
     });
   };
 
@@ -582,219 +654,69 @@ export default function BugBattle() {
     setShowComboText(true);
     Animated.sequence([
       Animated.timing(comboAnimation, {
-        toValue: 1.3,
-        duration: 300,
+        toValue: isSmallScreen ? 1.2 : 1.3,
+        duration: isSmallScreen ? 250 : 300,
         easing: Easing.out(Easing.back(1.5)),
         useNativeDriver: true,
       }),
       Animated.timing(comboAnimation, {
         toValue: 1,
-        duration: 300,
+        duration: isSmallScreen ? 250 : 300,
         easing: Easing.inOut(Easing.ease),
         useNativeDriver: true,
       }),
     ]).start(() => {
       setTimeout(() => {
         setShowComboText(false);
-      }, 500);
+      }, isSmallScreen ? 400 : 500);
     });
-  };
-
-  // レベルアップ判定
-  const checkLevelUp = () => {
-    const nextLevel = Math.min(5, Math.floor(score / 100) + 1);
-    if (nextLevel > currentLevel) {
-      setCurrentLevel(nextLevel);
-      playLevelUpAnimation();
-    }
-  };
-
-  // ゲームの初期化
-  const initializeGame = () => {
-    setBugs([]);
-    setEnemies([]);
-    setScore(0);
-    setGameOver(false);
-    setCurrentLevel(1);
-    setConsecutiveCorrect(0);
-    setGameTime(0);
-    setQuestionsAnswered(0); // レベルアップ用のカウントをリセット
-    
-    // 両方のクイズを初期化
-    generateQuestion(0);
-    generateQuestion(1);
-    
-    // 初期の味方を生成（状態リセット後に呼ぶ）
-    setTimeout(() => {
-      spawnBug(FRAME_BUG_TYPES[1]);
-    }, 100);
-    setPlayerTower({ hp: 100, maxHp: 100 });
-    setEnemyTower({ hp: 100, maxHp: 100 });
-    setIsGameOverScreen(false);
-    setIsGameClearScreen(false);
-    setGameTime(0);
-    startGameLoop();
-  };
-
-  // 問題の生成
-  const generateQuestion = (frameIndex: number) => {
-    const wordLists = getWordLists(isHiragana);
-    const wordList = wordLists[currentLevel as keyof typeof wordLists];
-    
-    // 両方のフレームで使用済みの単語を追跡
-    const usedWords = new Set<string>();
-    
-    // 他のフレームの単語をusedWordsに追加
-    frames.forEach((frame, idx) => {
-      if (idx !== frameIndex && frame.question) {
-        usedWords.add(frame.question);
-      }
-    });
-
-    // 未使用の単語を探す
-    let availableWords = wordList.filter(word => !usedWords.has(word));
-    if (availableWords.length === 0) {
-      // 全ての単語を使用済みの場合、リストをリセット
-      availableWords = wordList;
-      usedWords.clear();
-    }
-
-    // ランダムに単語を選択
-    const randomIndex = Math.floor(Math.random() * availableWords.length);
-    const word = availableWords[randomIndex];
-    usedWords.add(word);
-
-    const letters = word.split('').sort(() => Math.random() - 0.5);
-    const slots = Array(word.length).fill(null);
-
-    setFrames(prevFrames => 
-      prevFrames.map((frame, idx) => 
-        idx === frameIndex
-          ? {
-              ...frame,
-              question: word,
-              letters,
-              slots,
-              currentIndex: frame.currentIndex + 1,
-            }
-          : frame
-      )
-    );
-  };
-
-  // 敵の生成
-  const spawnEnemy = async () => {
-    if (isGameOverScreen || isGameClearScreen) return;
-    const difficulty = getCurrentDifficulty();
-    const currentEnemyCount = enemiesRef.current.length;
-    const maxEnemies = 5;
-
-    if (currentEnemyCount >= maxEnemies) {
-      return;
-    }
-
-    if (Math.random() > difficulty.enemySpawnRate * 0.7) {
-      return;
-    }
-
-    await playSound(soundsRef.current.enemySpawn);
-
-    const enemyTypes = Object.keys(ENEMY_IMAGES) as EnemyType[];
-    const enemyType = enemyTypes[Math.floor(Math.random() * enemyTypes.length)];
-    enemyIdRef.current += 1;
-    const newEnemy: Enemy = {
-      id: enemyIdRef.current,
-      type: enemyType,
-      x: isSmallScreen ? 50 : 150,
-      y: isSmallScreen ? 150 : 280,
-      targetX: 0,
-      targetY: 0,
-      speed: difficulty.enemySpeed * 2.0,
-      rotation: new Animated.Value(0),
-      scale: new Animated.Value(1),
-      hp: 120, // HPを増加
-      maxHp: 120,
-      attack: 15, // 攻撃力を調整
-      defense: 10, // 防御力を調整
-      isPoisoned: false,
-      poisonTimer: null,
-      poisonDamage: 0,
-    };
-
-    setEnemies(prevEnemies => {
-      const newEnemies = [...prevEnemies, newEnemy];
-      enemiesRef.current = newEnemies;
-      return newEnemies;
-    });
-  };
-
-  // ゲームループの開始
-  const startGameLoop = () => {
-    // 既存のインターバルをクリア
-    if (gameLoopRef.current) clearInterval(gameLoopRef.current);
-    if (enemySpawnIntervalRef.current) clearInterval(enemySpawnIntervalRef.current);
-    if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
-
-    gameLoopRef.current = setInterval(async () => {
-      if (isGameOverScreen || isGameClearScreen) return;
-      await updateGameState();
-    }, 1000 / 60) as unknown as NodeJS.Timeout;
-
-    enemySpawnIntervalRef.current = setInterval(async () => {
-      if (isGameOverScreen || isGameClearScreen) return;
-      await spawnEnemy();
-    }, ENEMY_SPAWN_INTERVAL) as unknown as NodeJS.Timeout;
-
-    timerIntervalRef.current = setInterval(() => {
-      if (isGameOverScreen || isGameClearScreen) return;
-      setGameTime(prev => prev + 1);
-    }, 1000) as unknown as NodeJS.Timeout;
   };
 
   // ゲーム状態の更新
   const updateGameState = async () => {
     const now = Date.now();
 
-    // 状態の更新を同期的に行う
-    await Promise.all([
-      updateBugs(),
-      updateEnemies()
-    ]);
-    
-    // 特殊効果の更新
-    setBugs(prevBugs => {
-      return prevBugs.map(bug => {
-        // 防御強化の効果時間チェック
-        if (bug.isDefenseBoosted && bug.defenseBoostTimer && now > bug.defenseBoostTimer) {
-          bug.defense = bug.baseDefense;
-          bug.isDefenseBoosted = false;
-          bug.defenseBoostTimer = null;
-        }
-        return bug;
-      });
-    });
-
-    setEnemies(prevEnemies => {
-      return prevEnemies.map(enemy => {
-        // 毒ダメージの処理
-        if (enemy.isPoisoned && enemy.poisonTimer && now > enemy.poisonTimer) {
-          enemy.isPoisoned = false;
-          enemy.poisonTimer = null;
-          enemy.poisonDamage = 0;
-        } else if (enemy.isPoisoned) {
-          enemy.hp -= enemy.poisonDamage;
-          if (enemy.hp <= 0) {
-            // 敵の消滅処理
-            animateEnemyDisappearance(enemy);
-            return null;
+    try {
+      // 状態の更新を同期的に行う
+      await Promise.all([
+        updateBugs(),
+        updateEnemies()
+      ]);
+      
+      // 特殊効果の更新
+      setBugs(prevBugs => {
+        return prevBugs.map(bug => {
+          if (bug.isDefenseBoosted && bug.defenseBoostTimer && now > bug.defenseBoostTimer) {
+            bug.defense = bug.baseDefense;
+            bug.isDefenseBoosted = false;
+            bug.defenseBoostTimer = null;
           }
-        }
-        return enemy;
-      }).filter((enemy): enemy is Enemy => enemy !== null);
-    });
-    
-    // 最新の状態を取得して衝突判定を実行
-    checkCollisions();
+          return bug;
+        });
+      });
+
+      setEnemies(prevEnemies => {
+        return prevEnemies.map(enemy => {
+          if (enemy.isPoisoned && enemy.poisonTimer && now > enemy.poisonTimer) {
+            enemy.isPoisoned = false;
+            enemy.poisonTimer = null;
+            enemy.poisonDamage = 0;
+          } else if (enemy.isPoisoned) {
+            enemy.hp -= enemy.poisonDamage;
+            if (enemy.hp <= 0) {
+              animateEnemyDisappearance(enemy);
+              return null;
+            }
+          }
+          return enemy;
+        }).filter((enemy): enemy is Enemy => enemy !== null);
+      });
+      
+      // 最新の状態を取得して衝突判定を実行
+      checkCollisions();
+    } catch (error) {
+      console.error('Error in updateGameState:', error);
+    }
   };
 
   // 虫の位置更新
@@ -827,7 +749,7 @@ export default function BugBattle() {
             ...enemy,
             x: newX,
           };
-        }).filter(enemy => enemy.x < screenWidth + 400); // 画面外に出た敵を削除（さらに緩める）
+        }).filter(enemy => enemy.x < screenWidth + 400);
         enemiesRef.current = updatedEnemies;
         resolve();
         return updatedEnemies;
@@ -860,7 +782,7 @@ export default function BugBattle() {
       const towerRightEdge = isSmallScreen ? 20 + 80 : 40 + 100;
       const collisionOffset = isSmallScreen ? 20 : 40;
       if (bug.x <= towerRightEdge - collisionOffset) {
-        updateTowerHp(true, 8); // タワーへのダメージを調整
+        updateTowerHp(true, 3); // タワーへのダメージを8から3に減少
         animateBugDisappearance(bug);
         return;
       }
@@ -888,8 +810,8 @@ export default function BugBattle() {
           // 敵を倒した場合のみスコアを加算
           if (enemy.hp <= 0) {
             const difficulty = getCurrentDifficulty();
-            const scoreGain = Math.floor(15 * difficulty.scoreMultiplier); // スコアを増加
-            setScore(prev => prev + scoreGain);
+            const scoreGain = Math.floor(15 * difficulty.scoreMultiplier);
+            // スコア加算処理を削除
           }
 
           if (bug.hp <= 0) {
@@ -908,7 +830,7 @@ export default function BugBattle() {
       const towerLeftEdge = screenWidth - (isSmallScreen ? 20 + 80 : 40 + 100);
       const collisionOffset = isSmallScreen ? 80 : 120;
       if (enemy.x >= towerLeftEdge - collisionOffset) {
-        updateTowerHp(false, 8); // タワーへのダメージを調整
+        updateTowerHp(false, 3); // タワーへのダメージを8から3に減少
         animateEnemyDisappearance(enemy);
         return;
       }
@@ -969,95 +891,15 @@ export default function BugBattle() {
     }, 200); // 500から200に短縮
   };
 
-  const handleRetry = () => {
-    // 既存のインターバルをクリア
-    if (gameLoopRef.current) {
-      clearInterval(gameLoopRef.current);
-      gameLoopRef.current = null;
-    }
-    if (enemySpawnIntervalRef.current) {
-      clearInterval(enemySpawnIntervalRef.current);
-      enemySpawnIntervalRef.current = null;
-    }
-    if (timerIntervalRef.current) {
-      clearInterval(timerIntervalRef.current);
-      timerIntervalRef.current = null;
-    }
+  // リトライ状態を管理するためのref
+  const isRetryingRef = useRef(false);
 
-    // 敵と味方をクリア
-    setEnemies([]);
-    setBugs([]);
-
-    // ゲーム状態をリセット
-    setGameOver(false);
-    setCurrentLevel(1);
-    setConsecutiveCorrect(0);
-    setGameTime(0);
-    setQuestionsAnswered(0);
-    setPlayerTower({ hp: 100, maxHp: 100 });
-    setEnemyTower({ hp: 100, maxHp: 100 });
-    setIsGameOverScreen(false);
-    setIsGameClearScreen(false);
-
-    // 状態の更新を待ってからゲームを初期化
-    requestAnimationFrame(() => {
-      // 両方のクイズを初期化
-      generateQuestion(0);
-      generateQuestion(1);
-      
-      // 初期の味方を生成
-      setTimeout(() => {
-        spawnBug(FRAME_BUG_TYPES[1]);
-        // 味方が生成された後にゲームループを開始
-        startGameLoop();
-      }, 100);
-    });
-  };
-
-  const handleSwitchKana = () => {
-    // 既存のインターバルをクリア
-    if (gameLoopRef.current) {
-      clearInterval(gameLoopRef.current);
-      gameLoopRef.current = null;
-    }
-    if (enemySpawnIntervalRef.current) {
-      clearInterval(enemySpawnIntervalRef.current);
-      enemySpawnIntervalRef.current = null;
-    }
-    if (timerIntervalRef.current) {
-      clearInterval(timerIntervalRef.current);
-      timerIntervalRef.current = null;
-    }
-
-    // 敵と味方をクリア
-    setEnemies([]);
-    setBugs([]);
-
-    // ゲーム状態をリセット
-    setIsGameOverScreen(false);
-    setIsGameClearScreen(false);
-    setGameOver(false);
-    setScore(0);
-    setCurrentLevel(1);
-    setConsecutiveCorrect(0);
-    setGameTime(0);
-
-    setIsHiragana(prev => {
-      const next = !prev;
-      // 状態更新後にゲームを初期化
-      requestAnimationFrame(() => {
-        initializeGame();
-      });
-      return next;
-    });
-  };
-
-  // コンポーネントのアンマウント時にクリーンアップ
+  // リトライ状態の変更を監視するuseEffect
   useEffect(() => {
-    return () => {
-      // インターバルをクリア
+    if (isRetryingRef.current) {
+      // 既存のインターバルをクリア
       if (gameLoopRef.current) {
-        clearInterval(gameLoopRef.current);
+        cancelAnimationFrame(gameLoopRef.current);
         gameLoopRef.current = null;
       }
       if (enemySpawnIntervalRef.current) {
@@ -1069,18 +911,79 @@ export default function BugBattle() {
         timerIntervalRef.current = null;
       }
 
-      // ゲーム状態をリセット
+      // 敵と味方をクリア
       setEnemies([]);
       setBugs([]);
+
+      // すべてのゲーム状態を一度にリセット
+      setGameOver(false);
       setIsGameOverScreen(false);
       setIsGameClearScreen(false);
-      setGameOver(false);
-      setScore(0);
       setCurrentLevel(1);
       setConsecutiveCorrect(0);
       setGameTime(0);
-    };
-  }, []);
+      setQuestionsAnswered(0);
+      setPlayerTower({ hp: 100, maxHp: 100 });
+      setEnemyTower({ hp: 100, maxHp: 100 });
+
+      // 少し遅延を入れてから初期化を実行
+      setTimeout(() => {
+        initializeGame();
+        startGameLoop();
+        isRetryingRef.current = false;
+      }, 100);
+    }
+  }, [isGameOverScreen, isGameClearScreen]);
+
+  // カナ切り替え状態を管理するためのref
+  const isSwitchingKanaRef = useRef(false);
+
+  // カナ切り替え状態の変更を監視するuseEffect
+  useEffect(() => {
+    if (isSwitchingKanaRef.current) {
+      // 既存のインターバルをクリア
+      if (gameLoopRef.current) {
+        cancelAnimationFrame(gameLoopRef.current);
+        gameLoopRef.current = null;
+      }
+      if (enemySpawnIntervalRef.current) {
+        clearInterval(enemySpawnIntervalRef.current);
+        enemySpawnIntervalRef.current = null;
+      }
+      if (timerIntervalRef.current) {
+        clearInterval(timerIntervalRef.current);
+        timerIntervalRef.current = null;
+      }
+
+      // 敵と味方をクリア
+      setEnemies([]);
+      setBugs([]);
+
+      // ゲーム状態をリセット
+      setIsGameOverScreen(false);
+      setIsGameClearScreen(false);
+      setGameOver(false);
+      setCurrentLevel(1);
+      setConsecutiveCorrect(0);
+      setGameTime(0);
+      setQuestionsAnswered(0);
+      setPlayerTower({ hp: 100, maxHp: 100 });
+      setEnemyTower({ hp: 100, maxHp: 100 });
+
+      // 少し遅延を入れてから初期化を実行
+      setTimeout(() => {
+        initializeGame();
+        startGameLoop();
+        isSwitchingKanaRef.current = false;
+      }, 100);
+    }
+  }, [isHiragana]);
+
+  const handleSwitchKana = () => {
+    isSwitchingKanaRef.current = true;
+    // カナの種類を切り替え
+    setIsHiragana(prev => !prev);
+  };
 
   // ゲームメニューの表示状態が変更されたときの処理
   useEffect(() => {
@@ -1089,7 +992,7 @@ export default function BugBattle() {
       if (isGameOverScreen || isGameClearScreen) {
         // インターバルをクリア
         if (gameLoopRef.current) {
-          clearInterval(gameLoopRef.current);
+          cancelAnimationFrame(gameLoopRef.current);
           gameLoopRef.current = null;
         }
         if (enemySpawnIntervalRef.current) {
@@ -1108,15 +1011,36 @@ export default function BugBattle() {
     }
   }, [isSettingsVisible]);
 
+  // 味方の生成間隔（ミリ秒）
+  const BUG_SPAWN_COOLDOWN = 1000; // 1秒間隔
+  const lastBugSpawnTimeRef = useRef<number>(0);
+
   // 味方の生成
   const spawnBug = (bugType: BugType) => {
     if (isGameOverScreen || isGameClearScreen) return;
+    
+    const now = Date.now();
+    // 生成間隔をチェック
+    if (now - lastBugSpawnTimeRef.current < BUG_SPAWN_COOLDOWN) {
+      return; // クールダウン中は生成しない
+    }
+    
+    // 現在の味方の数をチェック
+    const currentBugCount = bugsRef.current.length;
+    const maxBugs = 5; // 最大数を設定
+    
+    if (currentBugCount >= maxBugs) {
+      return; // 最大数に達している場合は生成しない
+    }
+
+    lastBugSpawnTimeRef.current = now; // 生成時間を更新
+
     const difficulty = getCurrentDifficulty();
     bugIdRef.current += 1;
     const newBug: Bug = {
       id: bugIdRef.current,
       type: bugType,
-      x: isSmallScreen ? screenWidth - 200 :  screenWidth - 200 ,
+      x: screenWidth - 200 ,
       y: isSmallScreen ? 150 : 280,
       targetX: 0,
       targetY: 0,
@@ -1126,13 +1050,13 @@ export default function BugBattle() {
       opacity: new Animated.Value(1),
       ability: BUG_ABILITIES[bugType],
       lastAbilityUse: 0,
-      hp: 100, // HPを調整
+      hp: 100,
       maxHp: 100,
-      defense: 12, // 防御力を調整
+      defense: 12,
       baseDefense: 12,
       isDefenseBoosted: false,
       defenseBoostTimer: null,
-      attack: 15, // 攻撃力を調整
+      attack: 15,
     };
     setBugs(prevBugs => {
       const newBugs = [...prevBugs, newBug];
@@ -1155,9 +1079,12 @@ export default function BugBattle() {
         
         // 両方のフレームで合計10問正解でレベルアップ
         if (newCount >= 10) {
-          setCurrentLevel(prev => prev + 1);
+          // レベル5以降はレベルアップしない
+          if (currentLevel < 5) {
+            setCurrentLevel(prev => prev + 1);
+            playLevelUpAnimation();
+          }
           setQuestionsAnswered(0);
-          playLevelUpAnimation();
         }
         return newCount;
       });
@@ -1474,51 +1401,21 @@ export default function BugBattle() {
     },
   };
 
-  // スコア獲得時のアニメーション
-  const playScoreAnimation = (score: number) => {
-    setShowScoreAnimation(true);
-    scoreAnimationValue.setValue(1);
-    Animated.sequence([
-      Animated.timing(scoreAnimationValue, {
-        toValue: 1.5,
-        duration: 200,
-        useNativeDriver: true,
-      }),
-      Animated.timing(scoreAnimationValue, {
-        toValue: 1,
-        duration: 200,
-        useNativeDriver: true,
-      }),
-    ]).start(() => {
-      setShowScoreAnimation(false);
-    });
-  };
-
-  // スコア更新時の処理
-  const updateScore = (newScore: number) => {
-    setScore(prev => {
-      const updatedScore = prev + newScore;
-      playScoreAnimation(newScore);
-      // 次のレベルまでの進捗を計算
-      const nextLevelThreshold = currentLevel * 100;
-      const progress = (updatedScore % 100) / 100;
-      setProgressToNextLevel(progress);
-      return updatedScore;  // 値を返す
-    });
-  };
-
   // タワーのHPを更新する関数
   const updateTowerHp = (isPlayer: boolean, damage: number) => {
+    console.log('updateTowerHp: Starting update', { isPlayer, damage });
     if (isPlayer) {
       setPlayerTower(prev => {
         const newHp = Math.max(0, prev.hp - damage);
+        console.log('updateTowerHp: Player tower HP update', { prevHp: prev.hp, newHp });
         if (newHp <= 0) {
+          console.log('updateTowerHp: Setting game clear screen');
           // ゲームクリア時の処理
           setIsGameClearScreen(true);
           setIsGameOverScreen(false);
           // インターバルをクリア
           if (gameLoopRef.current) {
-            clearInterval(gameLoopRef.current);
+            cancelAnimationFrame(gameLoopRef.current);
             gameLoopRef.current = null;
           }
           if (enemySpawnIntervalRef.current) {
@@ -1540,18 +1437,16 @@ export default function BugBattle() {
     } else {
       setEnemyTower(prev => {
         const newHp = Math.max(0, prev.hp - damage);
+        console.log('updateTowerHp: Enemy tower HP update', { prevHp: prev.hp, newHp });
         if (newHp <= 0) {
+          console.log('updateTowerHp: Setting game over screen');
           // ゲームオーバー時の処理
           setIsGameOverScreen(true);
           setIsGameClearScreen(false);
           // インターバルをクリア
           if (gameLoopRef.current) {
-            clearInterval(gameLoopRef.current);
+            cancelAnimationFrame(gameLoopRef.current);
             gameLoopRef.current = null;
-          }
-          if (enemySpawnIntervalRef.current) {
-            clearInterval(enemySpawnIntervalRef.current);
-            enemySpawnIntervalRef.current = null;
           }
           if (timerIntervalRef.current) {
             clearInterval(timerIntervalRef.current);
@@ -1596,7 +1491,7 @@ export default function BugBattle() {
   // useEffectでアンマウント時にインターバルをクリア
   useEffect(() => {
     return () => {
-      if (gameLoopRef.current) clearInterval(gameLoopRef.current);
+      if (gameLoopRef.current) cancelAnimationFrame(gameLoopRef.current);
       if (enemySpawnIntervalRef.current) clearInterval(enemySpawnIntervalRef.current);
       if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
     };
@@ -1637,11 +1532,85 @@ export default function BugBattle() {
     }
   };
 
+  // 問題の生成
+  const generateQuestion = (frameIndex: number) => {
+    const wordLists = getWordLists(isHiragana);
+    const wordList = wordLists[currentLevel as keyof typeof wordLists];
+    
+    // 両方のフレームで使用済みの単語を追跡
+    const usedWords = new Set<string>();
+    
+    // ランダムに単語を選択
+    let word;
+    do {
+      const randomIndex = Math.floor(Math.random() * wordList.length);
+      word = wordList[randomIndex];
+    } while (usedWords.has(word));
+    
+    usedWords.add(word);
+    
+    // 文字をシャッフル
+    const letters = word.split('').sort(() => Math.random() - 0.5);
+    
+    // フレームの状態を更新
+    setFrames(prevFrames => {
+      const newFrames = [...prevFrames];
+      newFrames[frameIndex] = {
+        ...newFrames[frameIndex],
+        question: word,
+        letters: letters,
+        slots: Array(word.length).fill(null),
+        currentIndex: 0
+      };
+      return newFrames;
+    });
+  };
+
+  // 敵の生成
+  const spawnEnemy = async () => {
+    if (isGameOverScreen || isGameClearScreen) return;
+    const difficulty = getCurrentDifficulty();
+    const currentEnemyCount = enemiesRef.current.length;
+    const maxEnemies = 5;
+
+    if (currentEnemyCount >= maxEnemies) return;
+    if (Math.random() > difficulty.enemySpawnRate * 0.7) return;
+    await playSound(soundsRef.current.enemySpawn);
+
+    const enemyTypes = Object.keys(ENEMY_IMAGES) as EnemyType[];
+    const enemyType = enemyTypes[Math.floor(Math.random() * enemyTypes.length)];
+    enemyIdRef.current += 1;
+    const newEnemy: Enemy = {
+      id: enemyIdRef.current,
+      type: enemyType,
+      x: isSmallScreen ? 50 : 150,
+      y: isSmallScreen ? 150 : 280,
+      targetX: 0,
+      targetY: 0,
+      speed: difficulty.enemySpeed * 2.0,
+      rotation: new Animated.Value(0),
+      scale: new Animated.Value(1),
+      hp: 120,
+      maxHp: 120,
+      attack: 15,
+      defense: 10,
+      isPoisoned: false,
+      poisonTimer: null,
+      poisonDamage: 0,
+    };
+
+    setEnemies(prevEnemies => {
+      const newEnemies = [...prevEnemies, newEnemy];
+      enemiesRef.current = newEnemies;
+      return newEnemies;
+    });
+  };
+
   return (
     <GameLayout>
       <View style={styles.container}>
         {/* レベル表示を絵文字ベースに変更 */}
-        <View style={styles.scoreTopCenter}>
+        <View style={styles.levelTopCenter}>
           <LevelIcon level={currentLevel} width={isSmallScreen ? 50 : 80} height={isSmallScreen ? 50 : 80} />
         </View>
         {/* 設定ボタン・メニュー */}
@@ -1673,9 +1642,11 @@ export default function BugBattle() {
                   />
                 ))}
               </View>
-              <Text style={styles.winnerText}>
-                😢 ゲームオーバー
-              </Text>
+              <View style={styles.winnerTextContainer}>
+                <Text style={styles.winnerText}>
+                  😢 ゲームオーバー
+                </Text>
+              </View>
             </View>
           </View>
         )}
@@ -1693,21 +1664,23 @@ export default function BugBattle() {
                   />
                 ))}
               </View>
-              <Animated.Text
-                style={[
-                  styles.winnerText,
-                  {
-                    transform: [{
-                      translateY: textBounceAnim.interpolate({
-                        inputRange: [0, 1],
-                        outputRange: [0, -10],
-                      }),
-                    }],
-                  },
-                ]}
-              >
-                🎉 ゲームクリア！
-              </Animated.Text>
+              <View style={styles.winnerTextContainer}>
+                <Animated.Text
+                  style={[
+                    styles.winnerText,
+                    {
+                      transform: [{
+                        translateY: textBounceAnim.interpolate({
+                          inputRange: [0, 1],
+                          outputRange: [0, -10],
+                        }),
+                      }],
+                    },
+                  ]}
+                >
+                  🎉 ゲームクリア！
+                </Animated.Text>
+              </View>
             </View>
           </View>
         )}
@@ -2214,16 +2187,19 @@ const styles = StyleSheet.create({
   } as TextStyle,
   levelUpContainer: {
     position: 'absolute',
-    top: '50%',
+    top: isSmallScreen ? '25%' : '30%',
     left: '50%',
-    transform: [{ translateX: -100 }, { translateY: -50 }],
+    transform: [
+      { translateX: isSmallScreen ? -80 : -100 },
+      { translateY: isSmallScreen ? -40 : -50 }
+    ],
     backgroundColor: 'rgba(255, 215, 0, 0.9)',
-    padding: 20,
-    borderRadius: 15,
+    padding: isSmallScreen ? 15 : 20,
+    borderRadius: isSmallScreen ? 12 : 15,
     zIndex: 1000,
   } as ViewStyle,
   levelUpText: {
-    fontSize: 32,
+    fontSize: isSmallScreen ? 24 : 32,
     fontWeight: 'bold',
     color: '#fff',
     textShadowColor: 'rgba(0, 0, 0, 0.5)',
@@ -2232,12 +2208,12 @@ const styles = StyleSheet.create({
   } as TextStyle,
   comboContainer: {
     position: 'absolute',
-    top: 100,
+    top: isSmallScreen ? 80 : 100,
     left: '50%',
-    transform: [{ translateX: -50 }],
+    transform: [{ translateX: isSmallScreen ? -40 : -50 }],
     backgroundColor: 'rgba(226, 132, 74, 0.9)',
-    padding: 15,
-    borderRadius: 25,
+    padding: isSmallScreen ? 10 : 15,
+    borderRadius: isSmallScreen ? 20 : 25,
     elevation: 5,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -2247,7 +2223,7 @@ const styles = StyleSheet.create({
   } as ViewStyle,
   comboText: {
     color: 'white',
-    fontSize: 24,
+    fontSize: isSmallScreen ? 18 : 24,
     fontWeight: 'bold',
     textAlign: 'center',
     textShadowColor: 'rgba(0, 0, 0, 0.5)',
@@ -2370,27 +2346,13 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.25,
     shadowRadius: 3.84,
   } as ViewStyle,
-  levelContainer: {
-    flex: 1,
-  },
-  progressBarContainer: {
-    height: 5,
-    backgroundColor: '#e0e0e0',
-    borderRadius: 3,
-    marginTop: 5,
-  },
-  progressBar: {
-    height: '100%',
-    backgroundColor: '#4a90e2',
-    borderRadius: 3,
-  },
   scoreAnimation: {
     position: 'absolute',
     color: '#4CAF50',
     fontSize: 20,
     fontWeight: 'bold',
   },
-  scoreTopCenter: {
+  levelTopCenter: {
     position: 'absolute',
     top: 0,
     left: 0,
@@ -2553,5 +2515,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 999,
+  } as ViewStyle,
+  winnerTextContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
   } as ViewStyle,
 }); 

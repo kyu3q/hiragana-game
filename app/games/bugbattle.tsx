@@ -2,7 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Audio } from 'expo-av';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
-import { Animated, Dimensions, Easing, Image, ImageStyle, Platform, StyleSheet, Text, TextStyle, TouchableOpacity, View, ViewStyle } from 'react-native';
+import { Animated, Dimensions, Easing, Image, ImageStyle, StyleSheet, Text, TextStyle, TouchableOpacity, View, ViewStyle } from 'react-native';
 import BugCastleIcon from '../../assets/images/bugbattle/BugCastleIcon';
 import EnemyCastleIcon from '../../assets/images/bugbattle/EnemyCastleIcon';
 import {
@@ -273,6 +273,7 @@ export default function BugBattle() {
     3: 100,
     4: 100
   });
+  const [correctAnswerAnimations, setCorrectAnswerAnimations] = useState<{[key: number]: Animated.Value[]}>({});
 
   // 連番ID生成用ref
   const bugIdRef = useRef(0);
@@ -466,12 +467,13 @@ export default function BugBattle() {
                   await sound.unloadAsync();
                 }
               } catch (error) {
-                console.error('音声のクリーンアップに失敗しました:', error);
+                // エラーを無視して続行
+                console.warn('音声のクリーンアップ中にエラーが発生しました:', error);
               }
             }
           }));
         } catch (error) {
-          console.error('音声のクリーンアップに失敗しました:', error);
+          console.warn('音声のクリーンアップ中にエラーが発生しました:', error);
         }
       };
       cleanup();
@@ -1103,6 +1105,31 @@ export default function BugBattle() {
         return newCombo;
       });
       
+      // 正解時のアニメーション
+      const animations = slots.map(() => new Animated.Value(0));
+      setCorrectAnswerAnimations(prev => ({
+        ...prev,
+        [frameIndex]: animations
+      }));
+
+      // 各文字のアニメーションを順番に実行
+      animations.forEach((anim, index) => {
+        setTimeout(() => {
+          Animated.sequence([
+            Animated.timing(anim, {
+              toValue: 1,
+              duration: 200,
+              useNativeDriver: true,
+            }),
+            Animated.timing(anim, {
+              toValue: 0,
+              duration: 200,
+              useNativeDriver: true,
+            })
+          ]).start();
+        }, index * 100);
+      });
+
       // 正解時に味方を生成（ゲーム終了時は生成しない）
       if (!isGameOverScreen && !isGameClearScreen) {
         const bugType = FRAME_BUG_TYPES[frameIndex + 1];
@@ -1406,12 +1433,12 @@ export default function BugBattle() {
       Animated.timing(scoreAnimationValue, {
         toValue: 1.5,
         duration: 200,
-        useNativeDriver: Platform.OS !== 'web',
+        useNativeDriver: true,
       }),
       Animated.timing(scoreAnimationValue, {
         toValue: 1,
         duration: 200,
-        useNativeDriver: Platform.OS !== 'web',
+        useNativeDriver: true,
       }),
     ]).start(() => {
       setShowScoreAnimation(false);
@@ -1643,13 +1670,19 @@ export default function BugBattle() {
                 <View style={styles.hpBarOuter}>
                   <View style={[styles.hpBarImproved, {
                     width: `${(playerTower.hp / playerTower.maxHp) * 100}%`,
-                    backgroundColor: playerTower.hp > playerTower.maxHp * 0.3 ? '#4CAF50' : '#F44336'
+                    backgroundColor: playerTower.hp > playerTower.maxHp * 0.3 
+                      ? 'rgba(233, 30, 99, 0.9)'  // ピンク色（敵の通常時）
+                      : 'rgba(233, 30, 99, 0.5)', // 薄いピンク色（敵の危険時）
+                    borderRightWidth: 2,
+                    borderRightColor: 'rgba(255, 255, 255, 0.3)',
                   }]} />
-                  <Text style={styles.hpBarText}>{playerTower.hp} / {playerTower.maxHp}</Text>
+                  <Text style={styles.hpBarText}>
+                    {playerTower.hp}/{playerTower.maxHp}
+                  </Text>
                 </View>
                 <Animated.View style={{
                   transform: [{ translateX: playerTowerShake }],
-                  backgroundColor: playerTowerHit ? '#ffcccc' : 'transparent',
+                  backgroundColor: playerTowerHit ? 'rgba(233, 30, 99, 0.2)' : 'transparent',
                   borderRadius: 20,
                 }}>
                   <View style={styles.towerEmojiContainer}>
@@ -1662,13 +1695,19 @@ export default function BugBattle() {
                 <View style={styles.hpBarOuter}>
                   <View style={[styles.hpBarImproved, {
                     width: `${(enemyTower.hp / enemyTower.maxHp) * 100}%`,
-                    backgroundColor: enemyTower.hp > enemyTower.maxHp * 0.3 ? '#F44336' : '#4CAF50'
+                    backgroundColor: enemyTower.hp > enemyTower.maxHp * 0.3 
+                      ? 'rgba(33, 150, 243, 0.9)'  // 青色（味方の通常時）
+                      : 'rgba(33, 150, 243, 0.5)', // 薄い青色（味方の危険時）
+                    borderRightWidth: 2,
+                    borderRightColor: 'rgba(255, 255, 255, 0.3)',
                   }]} />
-                  <Text style={styles.hpBarText}>{enemyTower.hp} / {enemyTower.maxHp}</Text>
+                  <Text style={styles.hpBarText}>
+                    {enemyTower.hp}/{enemyTower.maxHp}
+                  </Text>
                 </View>
                 <Animated.View style={{
                   transform: [{ translateX: enemyTowerShake }],
-                  backgroundColor: enemyTowerHit ? '#ffcccc' : 'transparent',
+                  backgroundColor: enemyTowerHit ? 'rgba(33, 150, 243, 0.2)' : 'transparent',
                   borderRadius: 20,
                 }}>
                   <View style={styles.towerEmojiContainer}>
@@ -1846,7 +1885,7 @@ export default function BugBattle() {
                         </View>
                         <View style={styles.slotsContainer}>
                           {frame.slots.map((slot, index) => (
-                            <View
+                            <Animated.View
                               key={`slot-${index}`}
                               style={[
                                 styles.letterSlot,
@@ -1854,18 +1893,36 @@ export default function BugBattle() {
                                 frame.id === 2 && {
                                   borderColor: '#4169E1',
                                   backgroundColor: 'rgba(65, 105, 225, 0.08)',
-                                }
+                                },
+                                correctAnswerAnimations[frameIndex]?.[index] && {
+                                  transform: [
+                                    {
+                                      scale: correctAnswerAnimations[frameIndex][index].interpolate({
+                                        inputRange: [0, 1],
+                                        outputRange: [1, 1.2],
+                                      }),
+                                    },
+                                  ],
+                                },
                               ]}
                             >
                               {slot && (
-                                <Text style={[
-                                  styles.letterSlotText,
-                                  frame.id === 2 && { color: '#4169E1' }
-                                ]}>
+                                <Animated.Text 
+                                  style={[
+                                    styles.letterSlotText,
+                                    frame.id === 2 && { color: '#4169E1' },
+                                    correctAnswerAnimations[frameIndex]?.[index] && {
+                                      color: correctAnswerAnimations[frameIndex][index].interpolate({
+                                        inputRange: [0, 1],
+                                        outputRange: [frame.id != 2 ? '#8B4513': '#4169E1' , '#4CAF50'],
+                                      }),
+                                    },
+                                  ]}
+                                >
                                   {slot}
-                                </Text>
+                                </Animated.Text>
                               )}
-                            </View>
+                            </Animated.View>
                           ))}
                         </View>
                         <View style={styles.availableLettersContainer}>
@@ -2053,6 +2110,12 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 3,
     elevation: 3,
+    transform: [{ scale: 1 }], // デフォルトのスケールを追加
+  } as ViewStyle,
+  correctAnswer: {
+    backgroundColor: 'rgba(76, 175, 80, 0.2)',
+    transform: [{ scale: 1.1 }],
+    borderColor: '#4CAF50',
   } as ViewStyle,
   filledSlot: {
     borderColor: '#8B4513',
@@ -2152,6 +2215,7 @@ const styles = StyleSheet.create({
   particle: {
     position: 'absolute',
     borderRadius: 50,
+    transform: [{ scale: 1 }], // デフォルトのスケールを追加
   } as ViewStyle,
   bug: {
     position: 'absolute',
@@ -2328,15 +2392,20 @@ const styles = StyleSheet.create({
     position: 'relative',
     width: isSmallScreen ? 60 : 110,
     height: isSmallScreen ? 18 : 22,
-    backgroundColor: '#e0e0e0',
+    backgroundColor: 'rgba(0, 0, 0, 0.1)',
     borderRadius: isSmallScreen ? 9 : 11,
     borderWidth: 2,
-    borderColor: '#888',
+    borderColor: 'rgba(255, 255, 255, 0.3)',
     marginTop: isSmallScreen ? 8 : 12,
     marginBottom: isSmallScreen ? 8 : 12,
     justifyContent: 'center',
     alignItems: 'center',
     overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+    elevation: 4,
   } as ViewStyle,
   hpBarImproved: {
     position: 'absolute',
@@ -2344,13 +2413,21 @@ const styles = StyleSheet.create({
     top: 0,
     height: '100%',
     borderRadius: 11,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+    elevation: 2,
   } as ViewStyle,
   hpBarText: {
-    color: '#222',
+    color: '#fff',
     fontWeight: 'bold',
     fontSize: isSmallScreen ? 10 : 14,
     zIndex: 2,
-  },
+    textShadowColor: 'rgba(0, 0, 0, 0.5)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 2,
+  } as TextStyle,
   resultsContainer: {
     padding: 32,
     backgroundColor: '#fff',

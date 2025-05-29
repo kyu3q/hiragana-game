@@ -804,7 +804,7 @@ const styles = StyleSheet.create({
   },
   card: {
     width: isSmallScreen 
-      ? (width - 180) / 6  
+      ? (width - 190) / 6  
       : (width - 160) / 6,  // iPad用（実際の画面幅から余白を引く）
     aspectRatio: isSmallScreen 
       ? 2.5 

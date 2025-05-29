@@ -5,6 +5,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Animated, Dimensions, Easing, Image, ImageStyle, StyleSheet, Text, TextStyle, TouchableOpacity, View, ViewStyle } from 'react-native';
 import BugCastleIcon from '../../assets/images/bugbattle/BugCastleIcon';
 import EnemyCastleIcon from '../../assets/images/bugbattle/EnemyCastleIcon';
+import LevelIcon from '../../assets/images/bugbattle/LevelIcon';
 import {
   katakanaLevel1Words,
   katakanaLevel2Words,
@@ -125,8 +126,9 @@ interface Frame {
   question: string | null;
   letters: string[];
   slots: (string | null)[];
-  cooldown: number; // クールダウン時間（ミリ秒）
-  lastUsed: number; // 最後に使用した時間
+  cooldown: number;
+  lastUsed: number;
+  currentIndex: number;
 }
 
 // 難易度設定
@@ -151,7 +153,7 @@ interface Particle {
   rotation: Animated.Value;
 }
 
-// タワーの型定義
+// タワー
 interface Tower {
   hp: number;
   maxHp: number;
@@ -168,7 +170,7 @@ const DIFFICULTY_LEVELS: Difficulty[] = [
 // 敵の出現間隔（ミリ秒）
 const ENEMY_SPAWN_INTERVAL = 3500; // 3.5秒ごとに敵の出現を試みる
 
-// 1枠分の新しい問題を生成する関数
+// 1枠分の新しい問題を生成
 const generateSingleQuestion = (usedIndices: number[], currentWordList: string[]): { question: string; letters: string[]; slots: (string | null)[]; usedIndex: number } => {
   let randomIndex;
   do {
@@ -193,7 +195,7 @@ const FRAME_BUG_TYPES: Record<number, BugType> = {
   4: 'caucasus',   // 4番目の枠はコーカサスオオカブト
 };
 
-// 虫の色の定義を更新
+// 虫の色
 const BUG_COLORS = {
   kabuto: '#8B4513',     // 茶色系
   kuwagata: '#4169E1',   // ロイヤルブルー
@@ -201,10 +203,7 @@ const BUG_COLORS = {
   caucasus: '#006400',   // ダークレッド
 } as const;
 
-// タワーの幅を定数で定義
-const TOWER_WIDTH = 120;
-
-// wordListsの型をstring[]に統一
+// wordLists
 const getWordLists = (isHiragana: boolean) => isHiragana ? {
   1: (level1Words as string[]),
   2: (level2Words as string[]),
@@ -261,10 +260,10 @@ export default function BugBattle() {
     message: '',
   });
   const [frames, setFrames] = useState<Frame[]>([
-    { id: 1, question: null, letters: [], slots: [], cooldown: 0, lastUsed: 0 },
-    { id: 2, question: null, letters: [], slots: [], cooldown: 0, lastUsed: 0 },
-    { id: 3, question: null, letters: [], slots: [], cooldown: 6000, lastUsed: 0 }, // 6秒クールダウン
-    { id: 4, question: null, letters: [], slots: [], cooldown: 8000, lastUsed: 0 }, // 8秒クールダウン
+    { id: 1, question: null, letters: [], slots: [], cooldown: 0, lastUsed: 0, currentIndex: 0 },
+    { id: 2, question: null, letters: [], slots: [], cooldown: 0, lastUsed: 0, currentIndex: 0 },
+    { id: 3, question: null, letters: [], slots: [], cooldown: 7000, lastUsed: 0, currentIndex: 0 },
+    { id: 4, question: null, letters: [], slots: [], cooldown: 9000, lastUsed: 0, currentIndex: 0 },
   ]);
   const [progressToNextLevel, setProgressToNextLevel] = useState(0);
   const [showScoreAnimation, setShowScoreAnimation] = useState(false);
@@ -274,6 +273,8 @@ export default function BugBattle() {
     4: 100
   });
   const [correctAnswerAnimations, setCorrectAnswerAnimations] = useState<{[key: number]: Animated.Value[]}>({});
+  // 状態の型定義を更新
+  const [questionsAnswered, setQuestionsAnswered] = useState<number>(0);
 
   // 連番ID生成用ref
   const bugIdRef = useRef(0);
@@ -291,6 +292,7 @@ export default function BugBattle() {
     abilityWasp: Audio.Sound | null;
     abilityButterfly: Audio.Sound | null;
     abilityFirefly: Audio.Sound | null;
+    levelUp: Audio.Sound | null;
   }>({
     bugSpawn: null,
     enemySpawn: null,
@@ -301,6 +303,7 @@ export default function BugBattle() {
     abilityWasp: null,
     abilityButterfly: null,
     abilityFirefly: null,
+    levelUp: null,
   });
   
   const [playerTower, setPlayerTower] = useState<Tower>({
@@ -366,10 +369,10 @@ export default function BugBattle() {
       x,
       y,
       color,
-      size: Math.random() * 4 + 2,
+      size: type === 'failure' ? Math.random() * 8 + 4 : Math.random() * 4 + 2, // 失敗時はパーティクルを大きく
       velocity: {
-        x: (Math.random() - 0.5) * 8,
-        y: (Math.random() - 0.5) * 8,
+        x: (Math.random() - 0.5) * (type === 'failure' ? 12 : 8), // 失敗時は速度を上げる
+        y: (Math.random() - 0.5) * (type === 'failure' ? 12 : 8),
       },
       opacity: new Animated.Value(1),
       scale: new Animated.Value(0),
@@ -382,24 +385,24 @@ export default function BugBattle() {
       Animated.parallel([
         Animated.sequence([
           Animated.timing(particle.scale, {
-            toValue: 1,
-            duration: 200,
+            toValue: type === 'failure' ? 1.5 : 1, // 失敗時はスケールを大きく
+            duration: type === 'failure' ? 300 : 200,
             useNativeDriver: true,
           }),
           Animated.timing(particle.scale, {
             toValue: 0,
-            duration: 300,
+            duration: type === 'failure' ? 400 : 300,
             useNativeDriver: true,
           }),
         ]),
         Animated.timing(particle.opacity, {
           toValue: 0,
-          duration: 500,
+          duration: type === 'failure' ? 700 : 500, // 失敗時は長く表示
           useNativeDriver: true,
         }),
         Animated.timing(particle.rotation, {
-          toValue: type === 'success' ? 360 : -360,
-          duration: 500,
+          toValue: type === 'failure' ? 720 : 360, // 失敗時は回転を増やす
+          duration: type === 'failure' ? 700 : 500,
           useNativeDriver: true,
         }),
       ]).start(() => {
@@ -421,6 +424,7 @@ export default function BugBattle() {
         const abilityWaspSound = new Audio.Sound();
         const abilityButterflySound = new Audio.Sound();
         const abilityFireflySound = new Audio.Sound();
+        const levelUpSound = new Audio.Sound();
 
         // 音声の読み込みを順番に実行
         await Promise.all([
@@ -432,7 +436,8 @@ export default function BugBattle() {
           abilityLadybugSound.loadAsync(require('../../assets/sounds/bugbattle/ability_ladybug_defense.mp3'), { shouldPlay: false }),
           abilityWaspSound.loadAsync(require('../../assets/sounds/bugbattle/ability_wasp_poison.mp3'), { shouldPlay: false }),
           abilityButterflySound.loadAsync(require('../../assets/sounds/bugbattle/ability_butterfly_heal..mp3'), { shouldPlay: false }),
-          abilityFireflySound.loadAsync(require('../../assets/sounds/bugbattle/ability_firefly_barrier.mp3'), { shouldPlay: false })
+          abilityFireflySound.loadAsync(require('../../assets/sounds/bugbattle/ability_firefly_barrier.mp3'), { shouldPlay: false }),
+          levelUpSound.loadAsync(require('../../assets/sounds/bugbattle/level_up.mp3'), { shouldPlay: false })
         ]);
 
         soundsRef.current = {
@@ -445,6 +450,7 @@ export default function BugBattle() {
           abilityWasp: abilityWaspSound,
           abilityButterfly: abilityButterflySound,
           abilityFirefly: abilityFireflySound,
+          levelUp: levelUpSound,
         };
       } catch (error) {
         console.error('音声の読み込みに失敗しました:', error);
@@ -556,18 +562,18 @@ export default function BugBattle() {
     Animated.sequence([
       Animated.timing(levelUpAnimation, {
         toValue: 1.5,
-        duration: 300,
-        easing: Easing.out(Easing.back(1.5)),
+        duration: 500,
         useNativeDriver: true,
       }),
       Animated.timing(levelUpAnimation, {
         toValue: 1,
-        duration: 300,
-        easing: Easing.inOut(Easing.ease),
+        duration: 500,
         useNativeDriver: true,
       }),
     ]).start(() => {
-      setShowLevelUpText(false);
+      setTimeout(() => {
+        setShowLevelUpText(false);
+      }, 1000);
     });
   };
 
@@ -612,7 +618,11 @@ export default function BugBattle() {
     setCurrentLevel(1);
     setConsecutiveCorrect(0);
     setGameTime(0);
-    generateQuestion();
+    setQuestionsAnswered(0); // レベルアップ用のカウントをリセット
+    
+    // 両方のクイズを初期化
+    generateQuestion(0);
+    generateQuestion(1);
     
     // 初期の味方を生成（状態リセット後に呼ぶ）
     setTimeout(() => {
@@ -627,24 +637,49 @@ export default function BugBattle() {
   };
 
   // 問題の生成
-  const generateQuestion = () => {
-    const usedIndices: number[] = [];
-    const newFrames = frames.map((frame) => {
-      if (frame.id <= 2) {
-        // 1番目と2番目の枠のみクイズを生成
-        const { question, letters, slots, usedIndex } = generateSingleQuestion(usedIndices, getWordLists(isHiragana)[1]);
-        usedIndices.push(usedIndex);
-        return {
-          ...frame,
-          question,
-          letters,
-          slots,
-        };
+  const generateQuestion = (frameIndex: number) => {
+    const wordLists = getWordLists(isHiragana);
+    const wordList = wordLists[currentLevel as keyof typeof wordLists];
+    
+    // 両方のフレームで使用済みの単語を追跡
+    const usedWords = new Set<string>();
+    
+    // 他のフレームの単語をusedWordsに追加
+    frames.forEach((frame, idx) => {
+      if (idx !== frameIndex && frame.question) {
+        usedWords.add(frame.question);
       }
-      // 3番目と4番目はクイズなし
-      return frame;
     });
-    setFrames(newFrames);
+
+    // 未使用の単語を探す
+    let availableWords = wordList.filter(word => !usedWords.has(word));
+    if (availableWords.length === 0) {
+      // 全ての単語を使用済みの場合、リストをリセット
+      availableWords = wordList;
+      usedWords.clear();
+    }
+
+    // ランダムに単語を選択
+    const randomIndex = Math.floor(Math.random() * availableWords.length);
+    const word = availableWords[randomIndex];
+    usedWords.add(word);
+
+    const letters = word.split('').sort(() => Math.random() - 0.5);
+    const slots = Array(word.length).fill(null);
+
+    setFrames(prevFrames => 
+      prevFrames.map((frame, idx) => 
+        idx === frameIndex
+          ? {
+              ...frame,
+              question: word,
+              letters,
+              slots,
+              currentIndex: frame.currentIndex + 1,
+            }
+          : frame
+      )
+    );
   };
 
   // 敵の生成
@@ -882,15 +917,24 @@ export default function BugBattle() {
 
   // 虫の消滅アニメーション
   const animateBugDisappearance = (bug: Bug) => {
+    // パーティクルエフェクトを追加（数を増やし、色を鮮やかに）
+    createParticles(bug.x, bug.y, '#FF4081', 50, 'failure');
+    // 追加のパーティクルエフェクト（異なる色で）
+    createParticles(bug.x, bug.y, '#2196F3', 30, 'failure');
+    // 味方が倒れた時の音を再生
+    playSound(soundsRef.current.collision);
+    // 画面を揺らす
+    shakeScreen();
+
     Animated.parallel([
       Animated.timing(bug.scale, {
         toValue: 0,
-        duration: 150, // 300から150に短縮
+        duration: 150,
         useNativeDriver: true,
       }),
       Animated.timing(bug.opacity, {
         toValue: 0,
-        duration: 150, // 300から150に短縮
+        duration: 150,
         useNativeDriver: true,
       }),
     ]).start(() => {
@@ -944,8 +988,30 @@ export default function BugBattle() {
     setEnemies([]);
     setBugs([]);
 
-    // initializeGameを使用して完全に初期化
-    initializeGame();
+    // ゲーム状態をリセット
+    setGameOver(false);
+    setCurrentLevel(1);
+    setConsecutiveCorrect(0);
+    setGameTime(0);
+    setQuestionsAnswered(0);
+    setPlayerTower({ hp: 100, maxHp: 100 });
+    setEnemyTower({ hp: 100, maxHp: 100 });
+    setIsGameOverScreen(false);
+    setIsGameClearScreen(false);
+
+    // 状態の更新を待ってからゲームを初期化
+    requestAnimationFrame(() => {
+      // 両方のクイズを初期化
+      generateQuestion(0);
+      generateQuestion(1);
+      
+      // 初期の味方を生成
+      setTimeout(() => {
+        spawnBug(FRAME_BUG_TYPES[1]);
+        // 味方が生成された後にゲームループを開始
+        startGameLoop();
+      }, 100);
+    });
   };
 
   const handleSwitchKana = () => {
@@ -1080,31 +1146,22 @@ export default function BugBattle() {
   const checkAnswer = (frameIndex: number, slots: string[]) => {
     if (isGameOverScreen || isGameClearScreen) return;
     if (!frames[frameIndex]?.question) return;
-    const usedIndices = frames.map(f => {
-      if (!f.question) return -1;
-      return getWordLists(isHiragana)[1].findIndex(w => w === f.question);
-    }).filter(idx => idx !== -1 && idx !== undefined && idx !== null && idx !== frameIndex);
 
     const answer = slots.join('');
     if (answer === frames[frameIndex].question) {
       // 正解の場合
-      const baseScore = 10;
-      const finalScore = calculateScore(baseScore);
-      setScore(prev => {
-        const updatedScore = prev + finalScore;
-        if (updatedScore > highScore) {
-          setHighScore(updatedScore);
+      setQuestionsAnswered(prev => {
+        const newCount = prev + 1;
+        
+        // 両方のフレームで合計10問正解でレベルアップ
+        if (newCount >= 10) {
+          setCurrentLevel(prev => prev + 1);
+          setQuestionsAnswered(0);
+          playLevelUpAnimation();
         }
-        return updatedScore;
+        return newCount;
       });
-      setConsecutiveCorrect(prev => {
-        const newCombo = prev + 1;
-        if (newCombo > 1) {
-          playComboAnimation();
-        }
-        return newCombo;
-      });
-      
+
       // 正解時のアニメーション
       const animations = slots.map(() => new Animated.Value(0));
       setCorrectAnswerAnimations(prev => ({
@@ -1130,7 +1187,7 @@ export default function BugBattle() {
         }, index * 100);
       });
 
-      // 正解時に味方を生成（ゲーム終了時は生成しない）
+      // 正解時に味方を生成
       if (!isGameOverScreen && !isGameClearScreen) {
         const bugType = FRAME_BUG_TYPES[frameIndex + 1];
         if (bugType) {
@@ -1138,20 +1195,12 @@ export default function BugBattle() {
         }
       }
 
-      // 5秒後に新しい問題を生成
+      // 正解したクイズのみ新しい問題を生成
       setTimeout(() => {
-        const { question, letters, slots: newSlots, usedIndex } = generateSingleQuestion(usedIndices, getWordLists(isHiragana)[1]);
-        setFrames(prevFrames => prevFrames.map((frame, idx) =>
-          idx === frameIndex
-            ? { ...frame, question, letters, slots: newSlots }
-            : frame
-        ));
-      }, 5000);
-
-      checkLevelUp();
+        generateQuestion(frameIndex);
+      }, 6000);
     } else {
       // 不正解の場合
-      setConsecutiveCorrect(0);
       setFrames(prevFrames =>
         prevFrames.map((frame, idx) =>
           idx === frameIndex
@@ -1454,7 +1503,7 @@ export default function BugBattle() {
       const nextLevelThreshold = currentLevel * 100;
       const progress = (updatedScore % 100) / 100;
       setProgressToNextLevel(progress);
-      return updatedScore;
+      return updatedScore;  // 値を返す
     });
   };
 
@@ -1591,9 +1640,9 @@ export default function BugBattle() {
   return (
     <GameLayout>
       <View style={styles.container}>
-        {/* スコアを上部中央に */}
+        {/* レベル表示を絵文字ベースに変更 */}
         <View style={styles.scoreTopCenter}>
-          <Text style={styles.scoreText}>スコア: {score}</Text>
+          <LevelIcon level={currentLevel} width={isSmallScreen ? 50 : 80} height={isSmallScreen ? 50 : 80} />
         </View>
         {/* 設定ボタン・メニュー */}
         <TouchableOpacity
@@ -1725,9 +1774,7 @@ export default function BugBattle() {
                     },
                   ]}
                 >
-                  <Text style={styles.levelUpText}>
-                    レベルアップ！
-                  </Text>
+                  <Text style={styles.levelUpText}>レベルアップ！</Text>
                 </Animated.View>
               )}
 
@@ -2170,23 +2217,18 @@ const styles = StyleSheet.create({
     top: '50%',
     left: '50%',
     transform: [{ translateX: -100 }, { translateY: -50 }],
-    backgroundColor: 'rgba(74, 144, 226, 0.9)',
+    backgroundColor: 'rgba(255, 215, 0, 0.9)',
     padding: 20,
-    borderRadius: 10,
-    elevation: 5,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
+    borderRadius: 15,
+    zIndex: 1000,
   } as ViewStyle,
   levelUpText: {
-    color: 'white',
     fontSize: 32,
     fontWeight: 'bold',
-    textAlign: 'center',
+    color: '#fff',
     textShadowColor: 'rgba(0, 0, 0, 0.5)',
-    textShadowOffset: { width: 1, height: 1 },
-    textShadowRadius: 2,
+    textShadowOffset: { width: 2, height: 2 },
+    textShadowRadius: 4,
   } as TextStyle,
   comboContainer: {
     position: 'absolute',
@@ -2253,17 +2295,6 @@ const styles = StyleSheet.create({
     height: '100%',
     transform: [{ scale: 1.1 }],
   } as ImageStyle,
-  enemyText: {
-    color: 'white',
-    fontSize: isSmallScreen ? 10 : 12,
-    fontWeight: 'bold',
-  } as TextStyle,
-  levelText: {
-    fontSize: 16,
-    textAlign: 'center',
-    marginBottom: 5,
-    color: '#ffd54f',
-  } as TextStyle,
   battleResultContainer: {
     position: 'absolute',
     top: '20%',
@@ -2353,9 +2384,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#4a90e2',
     borderRadius: 3,
   },
-  scoreContainer: {
-    alignItems: 'center',
-  },
   scoreAnimation: {
     position: 'absolute',
     color: '#4CAF50',
@@ -2364,7 +2392,7 @@ const styles = StyleSheet.create({
   },
   scoreTopCenter: {
     position: 'absolute',
-    top: 10,
+    top: 0,
     left: 0,
     right: 0,
     alignItems: 'center',

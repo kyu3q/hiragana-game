@@ -319,13 +319,12 @@ export default function BugBattle() {
   const [enemyTowerShake] = useState(new Animated.Value(0));
   const [playerTowerHit, setPlayerTowerHit] = useState(false);
   const [enemyTowerHit, setEnemyTowerHit] = useState(false);
-
-  // ゲームオーバー状態
   const [isGameOverScreen, setIsGameOverScreen] = useState(false);
-  // ゲームクリア状態
   const [isGameClearScreen, setIsGameClearScreen] = useState(false);
   const bounceAnim = useRef(new Animated.Value(0)).current;
   const textBounceAnim = useRef(new Animated.Value(0)).current;
+  const [isRetrying, setIsRetrying] = useState(false);
+  const [isSwitchingKana, setSwitchingKana] = useState(false);
 
   // 結果画面のアニメーション
   useEffect(() => {
@@ -565,14 +564,13 @@ export default function BugBattle() {
       setQuestionsAnswered(0);
       setPlayerTower({ hp: 100, maxHp: 100 });
       setEnemyTower({ hp: 100, maxHp: 100 });
-      isRetryingRef.current = false;
-      isSwitchingKanaRef.current = false;
+      setIsRetrying(false);
+      setSwitchingKana(false);
     };
   }, []);
 
   const handleRetry = () => {
-    isRetryingRef.current = true;
-    // ゲームオーバーとゲームクリアの状態をリセット
+    setIsRetrying(true);
     setIsGameOverScreen(false);
     setIsGameClearScreen(false);
   };
@@ -807,13 +805,6 @@ export default function BugBattle() {
           );
           playSound(soundsRef.current.collision);
 
-          // 敵を倒した場合のみスコアを加算
-          if (enemy.hp <= 0) {
-            const difficulty = getCurrentDifficulty();
-            const scoreGain = Math.floor(15 * difficulty.scoreMultiplier);
-            // スコア加算処理を削除
-          }
-
           if (bug.hp <= 0) {
             animateBugDisappearance(bug);
           }
@@ -891,12 +882,9 @@ export default function BugBattle() {
     }, 200); // 500から200に短縮
   };
 
-  // リトライ状態を管理するためのref
-  const isRetryingRef = useRef(false);
-
-  // リトライ状態の変更を監視するuseEffect
+  // リトライ状態の変更
   useEffect(() => {
-    if (isRetryingRef.current) {
+    if (isRetrying) {
       // 既存のインターバルをクリア
       if (gameLoopRef.current) {
         cancelAnimationFrame(gameLoopRef.current);
@@ -930,17 +918,14 @@ export default function BugBattle() {
       setTimeout(() => {
         initializeGame();
         startGameLoop();
-        isRetryingRef.current = false;
+        setIsRetrying(false);
       }, 100);
     }
-  }, [isGameOverScreen, isGameClearScreen]);
+  }, [isRetrying]);
 
-  // カナ切り替え状態を管理するためのref
-  const isSwitchingKanaRef = useRef(false);
-
-  // カナ切り替え状態の変更を監視するuseEffect
+  // カタカタ/ひらがなに切替状態の変更
   useEffect(() => {
-    if (isSwitchingKanaRef.current) {
+    if (isSwitchingKana) {
       // 既存のインターバルをクリア
       if (gameLoopRef.current) {
         cancelAnimationFrame(gameLoopRef.current);
@@ -974,13 +959,13 @@ export default function BugBattle() {
       setTimeout(() => {
         initializeGame();
         startGameLoop();
-        isSwitchingKanaRef.current = false;
+        setSwitchingKana(false);
       }, 100);
     }
-  }, [isHiragana]);
+  }, [isSwitchingKana]);
 
   const handleSwitchKana = () => {
-    isSwitchingKanaRef.current = true;
+    setSwitchingKana(true);
     // カナの種類を切り替え
     setIsHiragana(prev => !prev);
   };
@@ -1484,9 +1469,6 @@ export default function BugBattle() {
       ]).start(() => setTimeout(() => setEnemyTowerHit(false), 150));
     }
   };
-
-  // ゲーム進行ガード
-  const isGameEnded = isGameOverScreen || isGameClearScreen;
 
   // useEffectでアンマウント時にインターバルをクリア
   useEffect(() => {

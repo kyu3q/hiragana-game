@@ -9,9 +9,9 @@ import GameLayout from '../components/GameLayout';
 import GameMenu from '../components/GameMenu';
 import { useGame } from '../contexts/GameContext';
 
-const { width, height } = Dimensions.get('window');
-// iPadの画面サイズを考慮して、画面の向きに関係なく判定
-const isSmallScreen = Math.min(width, height) < 768; // 768ptを基準に
+const { width: rawWidth, height: rawHeight } = Dimensions.get('window');
+const screenWidth = Math.max(rawWidth, rawHeight);
+const isSmallScreen =  Math.min(rawWidth, rawHeight) < 768; // 768ptを基準に
 
 // 拗音マッピング
 const yoonMapHiragana: { [key: string]: string } = {

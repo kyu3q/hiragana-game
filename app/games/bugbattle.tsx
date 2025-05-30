@@ -23,9 +23,10 @@ import GameMenu from '../components/GameMenu';
 import { useGame } from '../contexts/GameContext';
 
 // 画面サイズの取得（グローバルで宣言）
-const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
-// iPadの画面サイズを考慮して、画面の向きに関係なく判定
-const isSmallScreen = Math.min(screenWidth, screenHeight) < 768; // 768ptを基準に
+const { width: rawWidth, height: rawHeight } = Dimensions.get('window');
+const screenWidth = Math.max(rawWidth, rawHeight);
+const screenHeight = Math.min(rawWidth, rawHeight);
+const isSmallScreen =  screenHeight < 768; // 768ptを基準に
 
 // 虫の画像マッピング
 const BUG_IMAGES = {
@@ -768,10 +769,10 @@ export default function BugBattle() {
     const currentEnemies = enemiesRef.current;
     
     currentBugs.forEach(bug => {
-      // 味方のタワーとの衝突判定
-      const towerRightEdge = isSmallScreen ? 20 + 80 : 40 + 100;
+      // 敵のタワーとの衝突判定
+      const towerLeftEdge = isSmallScreen ? 80 : 140;
       const collisionOffset = isSmallScreen ? 20 : 40;
-      if (bug.x <= towerRightEdge - collisionOffset) {
+      if (bug.x <= towerLeftEdge - collisionOffset) {
         updateTowerHp(true, 3); // タワーへのダメージを8から3に減少
         animateBugDisappearance(bug);
         return;
@@ -809,10 +810,10 @@ export default function BugBattle() {
     });
 
     currentEnemies.forEach(enemy => {
-      // 敵のタワーとの衝突判定
-      const towerLeftEdge = screenWidth - (isSmallScreen ? 20 + 80 : 40 + 100);
+      // 味方のタワーとの衝突判定
+      const towerRightEdge = screenWidth - (isSmallScreen ? 100 : 40);
       const collisionOffset = isSmallScreen ? 80 : 120;
-      if (enemy.x >= towerLeftEdge - collisionOffset) {
+      if (enemy.x >= towerRightEdge - collisionOffset) {
         updateTowerHp(false, 3); // タワーへのダメージを8から3に減少
         animateEnemyDisappearance(enemy);
         return;
@@ -877,9 +878,6 @@ export default function BugBattle() {
   // リトライ状態の変更
   useEffect(() => {
     if (isRetrying) {
-
-          console.log('リトライで初期化！！');
-
       // 既存のインターバルをクリア
       if (gameLoopRef.current) {
         cancelAnimationFrame(gameLoopRef.current);
@@ -931,9 +929,6 @@ export default function BugBattle() {
   // カタカタ/ひらがなに切替状態の変更
   useEffect(() => {
     if (isSwitchingKana) {
-
-       console.log('カタカタ/ひらがなに切替で初期化！！');
-
       // 既存のインターバルをクリア
       if (gameLoopRef.current) {
         cancelAnimationFrame(gameLoopRef.current);
@@ -1038,7 +1033,7 @@ export default function BugBattle() {
     const newBug: Bug = {
       id: bugIdRef.current,
       type: bugType,
-      x: screenWidth - 200 ,
+      x: screenWidth - (isSmallScreen ? 200 : 200),
       y: isSmallScreen ? 150 : 280,
       targetX: 0,
       targetY: 0,
@@ -1573,7 +1568,7 @@ export default function BugBattle() {
     const newEnemy: Enemy = {
       id: enemyIdRef.current,
       type: enemyType,
-      x: isSmallScreen ? 50 : 150,
+      x: isSmallScreen ? 40 : 100,
       y: isSmallScreen ? 150 : 280,
       targetX: 0,
       targetY: 0,
@@ -2122,7 +2117,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 3,
     elevation: 3,
-    transform: [{ scale: 1 }], // デフォルトのスケールを追加
+    transform: [{ scale: 1 }],
   } as ViewStyle,
   correctAnswer: {
     backgroundColor: 'rgba(76, 175, 80, 0.2)',
@@ -2225,7 +2220,7 @@ const styles = StyleSheet.create({
   particle: {
     position: 'absolute',
     borderRadius: 50,
-    transform: [{ scale: 1 }], // デフォルトのスケールを追加
+    transform: [{ scale: 1 }],
   } as ViewStyle,
   bug: {
     position: 'absolute',

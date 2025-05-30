@@ -7,10 +7,9 @@ import GameLayout from '../components/GameLayout';
 import GameMenu from '../components/GameMenu';
 import { useGame } from '../contexts/GameContext';
 
-const { width, height } = Dimensions.get('window');
-
-// iPadの画面サイズを考慮して、画面の向きに関係なく判定
-const isSmallScreen = Math.min(width, height) < 768; // 768ptを基準に
+const { width: rawWidth, height: rawHeight } = Dimensions.get('window');
+const screenWidth = Math.max(rawWidth, rawHeight);
+const isSmallScreen =  Math.min(rawWidth, rawHeight) < 768; // 768ptを基準に
 
 // 音声ファイルのインポート
 const OK_SOUND = require('../../assets/sounds/OK_Memory.mp3');
@@ -119,14 +118,6 @@ const MemoryGame = () => {
   const [isBattleButtonPressed, setIsBattleButtonPressed] = useState(false);
   const buttonAnim = useRef(new Animated.Value(0)).current;
   const buttonScale = useRef(new Animated.Value(1)).current;
-  const [screenWidth, setScreenWidth] = useState(width);
-
-  useEffect(() => {
-    const subscription = Dimensions.addEventListener('change', ({ window }) => {
-      setScreenWidth(window.width);
-    });
-    return () => subscription.remove();
-  }, []);
 
   // 文字の種類に応じて文字を取得
   const getCharacters = (type: 'hiragana' | 'katakana') => {
@@ -800,13 +791,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     width: '100%',
     paddingHorizontal: isSmallScreen ? 0 : 20,
-    maxWidth: width,
+    maxWidth: screenWidth,
     gap: isSmallScreen ? 6 : 12,
   },
   card: {
     width: isSmallScreen 
-      ? (width - 190) / 6  
-      : (width - 160) / 6,  // iPad用（実際の画面幅から余白を引く）
+      ? (screenWidth - 190) / 6  
+      : (screenWidth - 160) / 6,  // iPad用（実際の画面幅から余白を引く）
     aspectRatio: isSmallScreen 
       ? 2.5 
       : 1.8,  // iPad用（縦幅を調整：1.8は横:縦 = 9:5の比率）

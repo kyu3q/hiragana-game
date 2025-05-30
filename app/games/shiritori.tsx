@@ -463,7 +463,7 @@ const ShiritoriGame = () => {
                 },
               ]}
             >
-              {winner.includes('🦁') ? '🦁' : winner.includes('🐶') ? '🐶' : '🤝'}
+              <Text>{winner.includes('🦁') ? '🦁' : winner.includes('🐶') ? '🐶' : '🤝'}</Text>
             </Animated.Text>
             <Animated.Text
               style={[
@@ -478,7 +478,7 @@ const ShiritoriGame = () => {
                 },
               ]}
             >
-              🎉{winner}
+              <Text>🎉{winner}</Text>
             </Animated.Text>
             <View style={styles.resultTimes}>
               <View style={styles.resultTimeRow}>

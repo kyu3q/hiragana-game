@@ -877,6 +877,9 @@ export default function BugBattle() {
   // リトライ状態の変更
   useEffect(() => {
     if (isRetrying) {
+
+          console.log('リトライで初期化！！');
+
       // 既存のインターバルをクリア
       if (gameLoopRef.current) {
         cancelAnimationFrame(gameLoopRef.current);
@@ -895,7 +898,7 @@ export default function BugBattle() {
       setEnemies([]);
       setBugs([]);
 
-      // すべてのゲーム状態を一度にリセット
+      // すべてのゲーム状態をリセット
       setGameOver(false);
       setIsGameOverScreen(false);
       setIsGameClearScreen(false);
@@ -905,6 +908,16 @@ export default function BugBattle() {
       setQuestionsAnswered(0);
       setPlayerTower({ hp: 100, maxHp: 100 });
       setEnemyTower({ hp: 100, maxHp: 100 });
+
+      // クールダウンフレームの初期化
+      setFrames(prevFrames => prevFrames.map(frame => ({
+        ...frame,
+        lastUsed: 0,
+        question: null,
+        letters: [],
+        slots: Array(frame.slots.length).fill(null),
+        currentIndex: 0
+      })));
 
       // 少し遅延を入れてから初期化を実行
       setTimeout(() => {
@@ -918,6 +931,9 @@ export default function BugBattle() {
   // カタカタ/ひらがなに切替状態の変更
   useEffect(() => {
     if (isSwitchingKana) {
+
+       console.log('カタカタ/ひらがなに切替で初期化！！');
+
       // 既存のインターバルをクリア
       if (gameLoopRef.current) {
         cancelAnimationFrame(gameLoopRef.current);
@@ -946,6 +962,16 @@ export default function BugBattle() {
       setQuestionsAnswered(0);
       setPlayerTower({ hp: 100, maxHp: 100 });
       setEnemyTower({ hp: 100, maxHp: 100 });
+
+      // クールダウンフレームの初期化
+      setFrames(prevFrames => prevFrames.map(frame => ({
+        ...frame,
+        lastUsed: 0,
+        question: null,
+        letters: [],
+        slots: Array(frame.slots.length).fill(null),
+        currentIndex: 0
+      })));
 
       // 少し遅延を入れてから初期化を実行
       setTimeout(() => {
@@ -1375,13 +1401,10 @@ export default function BugBattle() {
 
   // タワーのHPを更新する関数
   const updateTowerHp = (isPlayer: boolean, damage: number) => {
-    console.log('updateTowerHp: Starting update', { isPlayer, damage });
     if (isPlayer) {
       setPlayerTower(prev => {
         const newHp = Math.max(0, prev.hp - damage);
-        console.log('updateTowerHp: Player tower HP update', { prevHp: prev.hp, newHp });
         if (newHp <= 0) {
-          console.log('updateTowerHp: Setting game clear screen');
           // ゲームクリア時の処理
           setIsGameClearScreen(true);
           setIsGameOverScreen(false);
@@ -1409,9 +1432,7 @@ export default function BugBattle() {
     } else {
       setEnemyTower(prev => {
         const newHp = Math.max(0, prev.hp - damage);
-        console.log('updateTowerHp: Enemy tower HP update', { prevHp: prev.hp, newHp });
         if (newHp <= 0) {
-          console.log('updateTowerHp: Setting game over screen');
           // ゲームオーバー時の処理
           setIsGameOverScreen(true);
           setIsGameClearScreen(false);
@@ -1613,7 +1634,8 @@ export default function BugBattle() {
               </View>
               <View style={styles.winnerTextContainer}>
                 <Text style={styles.winnerText}>
-                  😢 ゲームオーバー
+                  <Text>😢 </Text>
+                  <Text>ゲームオーバー</Text>
                 </Text>
               </View>
             </View>
@@ -1647,7 +1669,8 @@ export default function BugBattle() {
                     },
                   ]}
                 >
-                  🎉 ゲームクリア！
+                  <Text>🎉 </Text>
+                  <Text>ゲームクリア！</Text>
                 </Animated.Text>
               </View>
             </View>

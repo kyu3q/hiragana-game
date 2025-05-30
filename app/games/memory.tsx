@@ -592,7 +592,7 @@ const MemoryGame = () => {
                 winner === 'lion' ? styles.lionColor : winner === 'dog' ? styles.dogColor : styles.drawColor,
                 textBounceStyle
               ]}>
-                🎉{winner === 'draw' ? '引き分け！' : `${winner === 'lion' ? '🦁' : '🐶'}の勝ち！`}
+                <Text>🎉{winner === 'draw' ? '引き分け！' : `${winner === 'lion' ? '🦁' : '🐶'}の勝ち！`}</Text>
               </Animated.Text>
               <View style={styles.resultScores}>
                 <View style={styles.resultScoreRow}>

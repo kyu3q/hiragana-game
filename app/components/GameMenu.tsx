@@ -11,7 +11,7 @@ const isSmallScreen = Math.min(screenWidth, screenHeight) < 768; // 768ptを基�
 // ゲーム一覧
 const GAMES = [
   { id: 'shiritori', name: '親子しりとり' },
-  { id: 'memory', name: 'めもりー対決' },
+  { id: 'memory', name: 'メモリ対決' },
   { id: 'bugbattle', name: '昆虫バトル' },
 ] as const;
 
@@ -79,66 +79,66 @@ export default function GameMenu({
           }
         ]}
       >
-        <View style={styles.menuContainer}>
-          <TouchableOpacity
-            style={styles.closeButton}
-            onPress={onClose}
-          >
-            <Ionicons name="close" size={24} color="#333" />
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.menuItem}
-            onPress={() => {
-              onRetry();
-              onClose();
-            }}
-          >
-            <Ionicons name="refresh" size={24} color="#333" />
-            <Text style={styles.menuText}>リトライ</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.menuItem}
-            onPress={() => {
-              handleSwitchGame();
-              onClose();
-            }}
-          >
-            <Ionicons name="game-controller" size={24} color="#333" />
-            <Text style={styles.menuText}>ゲーム切替</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.menuItem}
-            onPress={() => {
-              onSwitchKana();
-              onClose();
-            }}
-          >
-            <Ionicons name="text" size={24} color="#333" />
-            <Text style={styles.menuText}>
-              {isHiragana ? 'カタカナに切替' : 'ひらがなに切替'}
-            </Text>
-          </TouchableOpacity>
-          <View style={styles.gameButtonsContainer}>
-            {GAMES.map((game) => (
-              <TouchableOpacity
-                key={game.id}
-                style={[
-                  game.id === currentGame ? styles.currentGameButton : styles.gameButton,
-                ]}
-                onPress={() => handleGameSelect(game.id)}
-                disabled={game.id === currentGame}
-              >
-                <Text
+        <TouchableOpacity
+          style={styles.overlayTouchable}
+          onPress={onClose}
+          activeOpacity={1}
+        >
+          <View style={styles.menuContainer}>
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => {
+                onRetry();
+                onClose();
+              }}
+            >
+              <Ionicons name="refresh" size={24} color="#333" />
+              <Text style={styles.menuText}>リトライ</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => {
+                onSwitchKana();
+                onClose();
+              }}
+            >
+              <Ionicons name="text" size={24} color="#333" />
+              <Text style={styles.menuText}>
+                {isHiragana ? 'カタカナに切替' : 'ひらがなに切替'}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => {
+                handleSwitchGame();
+                onClose();
+              }}
+            >
+              <Ionicons name="game-controller" size={24} color="#333" />
+              <Text style={styles.menuText}>ゲーム切替</Text>
+            </TouchableOpacity>
+            <View style={styles.gameButtonsContainer}>
+              {GAMES.map((game) => (
+                <TouchableOpacity
+                  key={game.id}
                   style={[
-                    game.id === currentGame ? styles.currentGameButtonText : styles.gameButtonText,
+                    game.id === currentGame ? styles.currentGameButton : styles.gameButton,
                   ]}
+                  onPress={() => handleGameSelect(game.id)}
+                  disabled={game.id === currentGame}
                 >
-                  {game.name}
-                </Text>
-              </TouchableOpacity>
-            ))}
+                  <Text
+                    style={[
+                      game.id === currentGame ? styles.currentGameButtonText : styles.gameButtonText,
+                    ]}
+                  >
+                    {game.name}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
           </View>
-        </View>
+        </TouchableOpacity>
       </Animated.View>
     </View>
   );
@@ -156,26 +156,36 @@ const styles = StyleSheet.create({
   overlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: 'flex-start',
+    alignItems: 'flex-end',
+    paddingTop: 30,
+    paddingRight: 50,
+  },
+  overlayTouchable: {
+    width: '100%',
+    height: '100%',
+    justifyContent: 'flex-start',
+    alignItems: 'flex-end',
   },
   menuContainer: {
     backgroundColor: 'white',
     borderRadius: 10,
-    padding: 20,
-    width: '80%',
+    padding: 10,
+    width: 250,
     maxWidth: 300,
-  },
-  closeButton: {
-    position: 'absolute',
-    top: 10,
-    right: 10,
-    padding: 5,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
   },
   menuItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 15,
+    paddingVertical: 10,
     borderBottomWidth: 1,
     borderBottomColor: '#eee',
   },
@@ -196,14 +206,14 @@ const styles = StyleSheet.create({
     backgroundColor: '#e0e0e0',
     paddingVertical: 8,
     paddingHorizontal: isSmallScreen ? 12 : 16,
-    borderRadius: 20,
+    borderRadius: 5,
     minWidth: isSmallScreen ? 80 : 100,
   },
   currentGameButton: {
     backgroundColor: '#4a90e2',
     paddingVertical: 8,
     paddingHorizontal: isSmallScreen ? 12 : 16,
-    borderRadius: 20,
+    borderRadius: 5,
     minWidth: isSmallScreen ? 80 : 100,
   },
   gameButtonText: {

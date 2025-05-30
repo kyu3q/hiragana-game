@@ -20,6 +20,7 @@ import {
 } from '../../constants/games/wordLists';
 import GameLayout from '../components/GameLayout';
 import GameMenu from '../components/GameMenu';
+import { useGame } from '../contexts/GameContext';
 
 // 画面サイズの取得（グローバルで宣言）
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
@@ -220,12 +221,12 @@ const getWordLists = (isHiragana: boolean) => isHiragana ? {
 
 export default function BugBattle() {
   const router = useRouter();
+  const { isHiragana, setIsHiragana } = useGame();
   const [bugs, setBugs] = useState<Bug[]>([]);
   const [enemies, setEnemies] = useState<Enemy[]>([]);
   const bugsRef = useRef<Bug[]>([]);
   const enemiesRef = useRef<Enemy[]>([]);
   const [currentQuestion, setCurrentQuestion] = useState<Question | null>(null);
-  const [isHiragana, setIsHiragana] = useState(true);
   const [gameOver, setGameOver] = useState(false);
   const [isSettingsVisible, setIsSettingsVisible] = useState(false);
   const [selectedLetters, setSelectedLetters] = useState<string[]>([]);
@@ -589,34 +590,25 @@ export default function BugBattle() {
 
   // ゲームループの開始
   const startGameLoop = () => {
-    // 既存のゲームループをクリア
-    if (gameLoopRef.current) {
-      cancelAnimationFrame(gameLoopRef.current);
-      gameLoopRef.current = null;
+    // 既存のゲームループが存在しない場合のみ新しいループを開始
+    if (!gameLoopRef.current) {
+      const gameLoop = () => {
+        if (!gameOver && !isGameOverScreen && !isGameClearScreen) {
+          updateGameState();
+          gameLoopRef.current = requestAnimationFrame(gameLoop);
+        }
+      };
+      gameLoopRef.current = requestAnimationFrame(gameLoop);
     }
 
-    // 敵の生成インターバルを設定
-    if (enemySpawnIntervalRef.current) {
-      clearInterval(enemySpawnIntervalRef.current);
-      enemySpawnIntervalRef.current = null;
+    // 既存の敵生成インターバルが存在しない場合のみ新しいインターバルを設定
+    if (!enemySpawnIntervalRef.current) {
+      enemySpawnIntervalRef.current = setInterval(() => {
+        if (!gameOver && !isGameOverScreen && !isGameClearScreen) {
+          spawnEnemy();
+        }
+      }, ENEMY_SPAWN_INTERVAL) as unknown as NodeJS.Timeout;
     }
-
-    // 新しい敵生成インターバルを設定
-    enemySpawnIntervalRef.current = setInterval(() => {
-      if (!gameOver && !isGameOverScreen && !isGameClearScreen) {
-        spawnEnemy();
-      }
-    }, ENEMY_SPAWN_INTERVAL) as unknown as NodeJS.Timeout;
-
-    // 新しいゲームループを開始
-    const gameLoop = () => {
-      if (!gameOver && !isGameOverScreen && !isGameClearScreen) {
-        updateGameState();
-        gameLoopRef.current = requestAnimationFrame(gameLoop);
-      }
-    };
-
-    gameLoopRef.current = requestAnimationFrame(gameLoop);
   };
 
   // 難易度の取得
@@ -966,35 +958,30 @@ export default function BugBattle() {
 
   const handleSwitchKana = () => {
     setSwitchingKana(true);
-    // カナの種類を切り替え
-    setIsHiragana(prev => !prev);
+    setIsHiragana(!isHiragana);
   };
 
-  // ゲームメニューの表示状態が変更されたときの処理
   useEffect(() => {
-    if (!isSettingsVisible) {
-      // メニューが閉じられたときにゲーム状態を確認
-      if (isGameOverScreen || isGameClearScreen) {
-        // インターバルをクリア
-        if (gameLoopRef.current) {
-          cancelAnimationFrame(gameLoopRef.current);
-          gameLoopRef.current = null;
-        }
-        if (enemySpawnIntervalRef.current) {
-          clearInterval(enemySpawnIntervalRef.current);
-          enemySpawnIntervalRef.current = null;
-        }
-        if (timerIntervalRef.current) {
-          clearInterval(timerIntervalRef.current);
-          timerIntervalRef.current = null;
-        }
-
-        // 敵と味方をクリア
-        setEnemies([]);
-        setBugs([]);
+    if (isGameOverScreen || isGameClearScreen) {
+      // インターバルをクリア
+      if (gameLoopRef.current) {
+        cancelAnimationFrame(gameLoopRef.current);
+        gameLoopRef.current = null;
       }
+      if (enemySpawnIntervalRef.current) {
+        clearInterval(enemySpawnIntervalRef.current);
+        enemySpawnIntervalRef.current = null;
+      }
+      if (timerIntervalRef.current) {
+        clearInterval(timerIntervalRef.current);
+        timerIntervalRef.current = null;
+      }
+
+      // 敵と味方をクリア
+      setEnemies([]);
+      setBugs([]);
     }
-  }, [isSettingsVisible]);
+  }, [isGameOverScreen, isGameClearScreen]);
 
   // 味方の生成間隔（ミリ秒）
   const BUG_SPAWN_COOLDOWN = 1000; // 1秒間隔

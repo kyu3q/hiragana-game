@@ -5,6 +5,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Animated, Dimensions, Image, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import GameLayout from '../components/GameLayout';
 import GameMenu from '../components/GameMenu';
+import { useGame } from '../contexts/GameContext';
 
 const { width, height } = Dimensions.get('window');
 
@@ -97,6 +98,7 @@ type Card = {
 type PlayerType = 'lion' | 'dog';
 
 const MemoryGame = () => {
+  const { isHiragana, setIsHiragana } = useGame();
   const [cards, setCards] = useState<Card[]>([]);
   const [flippedCards, setFlippedCards] = useState<Card[]>([]);
   const [matchedPairs, setMatchedPairs] = useState<number[]>([]);
@@ -109,7 +111,6 @@ const MemoryGame = () => {
   const [winner, setWinner] = useState<'lion' | 'dog' | 'draw' | null>(null);
   const [matchedColors, setMatchedColors] = useState<{ [key: number]: PlayerType }>({});
   const [isSettingsVisible, setIsSettingsVisible] = useState(false);
-  const [isHiragana, setIsHiragana] = useState(true);
   const [sound, setSound] = useState<Audio.Sound | null>(null);
   const router = useRouter();
   const flipAnimations = useRef<{ [key: number]: Animated.Value }>({}).current;

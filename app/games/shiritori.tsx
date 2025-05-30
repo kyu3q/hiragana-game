@@ -7,6 +7,7 @@ import { shiritoriData as hiraganaData } from '../../constants/games/shiritoriHi
 import { shiritoriData as katakanaData } from '../../constants/games/shiritoriKatakana';
 import GameLayout from '../components/GameLayout';
 import GameMenu from '../components/GameMenu';
+import { useGame } from '../contexts/GameContext';
 
 const { width, height } = Dimensions.get('window');
 // iPadの画面サイズを考慮して、画面の向きに関係なく判定
@@ -150,7 +151,7 @@ const HistoryDisplay = ({ history, wrongWord }: { history: HistoryItem[]; wrongW
 
 const ShiritoriGame = () => {
   const router = useRouter();
-  const [isHiragana, setIsHiragana] = useState(true);
+  const { isHiragana, setIsHiragana } = useGame();
   const [currentWord, setCurrentWord] = useState('');
   const [choices, setChoices] = useState<string[]>([]);
   const [currentPlayer, setCurrentPlayer] = useState<PlayerType>('parent');

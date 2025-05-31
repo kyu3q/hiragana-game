@@ -118,6 +118,7 @@ const MemoryGame = () => {
   const [isBattleButtonPressed, setIsBattleButtonPressed] = useState(false);
   const buttonAnim = useRef(new Animated.Value(0)).current;
   const buttonScale = useRef(new Animated.Value(1)).current;
+  const [clickQueue, setClickQueue] = useState<Card[]>([]);
 
   // 文字の種類に応じて文字を取得
   const getCharacters = (type: 'hiragana' | 'katakana') => {
@@ -205,6 +206,7 @@ const MemoryGame = () => {
     setMatchedColors({});
     setIsChecking(false);
     setIsBattleButtonPressed(false);
+    setClickQueue([]);
   }, [selectedType, isHiragana]);
 
   // 音声を再生する関数
@@ -248,6 +250,7 @@ const MemoryGame = () => {
     setMatchedColors({});
     setIsChecking(false);
     setIsBattleButtonPressed(false);
+    setClickQueue([]);
   };
 
   const handleBattleModeToggle = () => {
@@ -274,92 +277,80 @@ const MemoryGame = () => {
     setIsBattleButtonPressed(false);
     setShowResult(false);
     setWinner(null);
+    setClickQueue([]);
   };
 
   const handleCardClick = (clickedCard: Card) => {
     if (
-      isChecking || 
-      flippedCards.length >= 2 || 
-      clickedCard.isMatched || 
+      clickedCard.isMatched ||
       flippedCards.includes(clickedCard) ||
       (flippedCards.length === 1 && flippedCards[0].id === clickedCard.id)
     ) {
       return;
     }
+    setClickQueue(prev => [...prev, clickedCard]);
+  };
+
+  // クリックキューを監視して順次処理
+  useEffect(() => {
+    if (clickQueue.length < 1) return;
+    if (flippedCards.length >= 2) return; // 2枚めくり中は待つ
+
+    const nextCard = clickQueue[0];
+    setClickQueue(prev => prev.slice(1));
 
     // カードをフリップ
-    Animated.timing(flipAnimations[clickedCard.id], {
+    Animated.timing(flipAnimations[nextCard.id], {
       toValue: 1,
       duration: 300,
       useNativeDriver: true,
     }).start();
 
-    const updatedCards = cards.map(card => 
-      card.id === clickedCard.id ? { ...card, isFlipped: true } : card
+    const updatedCards = cards.map(card =>
+      card.id === nextCard.id ? { ...card, isFlipped: true } : card
     );
     setCards(updatedCards);
 
-    const newFlippedCards = [...flippedCards, clickedCard];
+    const newFlippedCards = [...flippedCards, nextCard];
     setFlippedCards(newFlippedCards);
 
     if (newFlippedCards.length === 2) {
-      setIsChecking(true);
       const [first, second] = newFlippedCards;
-      
       if (first.value === second.value) {
-        // マッチ成功時の音を再生
         playSound(OK_SOUND);
-        
-        const matchedCards = updatedCards.map(card => 
-          card.id === first.id || card.id === second.id ? { ...card, isMatched: true } : card
-        );
-        setCards(matchedCards);
-
-        // マッチしたペアのIDを追加（重複チェック付き）
-        const newMatchedPairs = [...matchedPairs];
-        if (!newMatchedPairs.includes(first.id)) {
-          newMatchedPairs.push(first.id);
-        }
-        if (!newMatchedPairs.includes(second.id)) {
-          newMatchedPairs.push(second.id);
-        }
-        setMatchedPairs(newMatchedPairs);
-
-        // 現在のプレイヤーの色を記録
-        const currentPlayerAtMatch = currentPlayer;
-        setMatchedColors(prev => ({
-          ...prev,
-          [first.id]: currentPlayerAtMatch,
-          [second.id]: currentPlayerAtMatch
-        }));
-
-        setFlippedCards([]);
-        setIsChecking(false);
-        if (isBattleMode) {
-          const newPlayerPairs = { ...playerPairs, [currentPlayerAtMatch]: playerPairs[currentPlayerAtMatch] + 1 };
-          setPlayerPairs(newPlayerPairs);
-          
-          if (newMatchedPairs.length === cards.length) {
-            // ゲーム終了時の音を再生
-            playSound(FINISH_SOUND);
-            const lionScore = newPlayerPairs.lion;
-            const dogScore = newPlayerPairs.dog;
-            if (lionScore > dogScore) {
-              setWinner('lion');
-            } else if (dogScore > lionScore) {
-              setWinner('dog');
-            } else {
-              setWinner('draw');
-            }
-            setShowResult(true);
-          }
-        }
-      } else {
-        // マッチ失敗時の音を再生
-        playSound(NG_SOUND);
-        
         setTimeout(() => {
-          // カードを元に戻す
+          const matchedCards = updatedCards.map(card =>
+            card.id === first.id || card.id === second.id ? { ...card, isMatched: true } : card
+          );
+          setCards(matchedCards);
+          const newMatchedPairs = [...matchedPairs];
+          if (!newMatchedPairs.includes(first.id)) newMatchedPairs.push(first.id);
+          if (!newMatchedPairs.includes(second.id)) newMatchedPairs.push(second.id);
+          setMatchedPairs(newMatchedPairs);
+          const currentPlayerAtMatch = currentPlayer;
+          setMatchedColors(prev => ({
+            ...prev,
+            [first.id]: currentPlayerAtMatch,
+            [second.id]: currentPlayerAtMatch
+          }));
+          setFlippedCards([]);
+          if (isBattleMode) {
+            const newPlayerPairs = { ...playerPairs, [currentPlayerAtMatch]: playerPairs[currentPlayerAtMatch] + 1 };
+            setPlayerPairs(newPlayerPairs);
+            if (newMatchedPairs.length === cards.length) {
+              playSound(FINISH_SOUND);
+              const lionScore = newPlayerPairs.lion;
+              const dogScore = newPlayerPairs.dog;
+              if (lionScore > dogScore) setWinner('lion');
+              else if (dogScore > lionScore) setWinner('dog');
+              else setWinner('draw');
+              setShowResult(true);
+            }
+          }
+        }, 500); // アニメーション後にマッチ処理
+      } else {
+        playSound(NG_SOUND);
+        setTimeout(() => {
           Animated.timing(flipAnimations[first.id], {
             toValue: 0,
             duration: 300,
@@ -370,20 +361,18 @@ const MemoryGame = () => {
             duration: 300,
             useNativeDriver: true,
           }).start();
-
-          const resetCards = updatedCards.map(card => 
+          const resetCards = updatedCards.map(card =>
             card.id === first.id || card.id === second.id ? { ...card, isFlipped: false } : card
           );
           setCards(resetCards);
           setFlippedCards([]);
-          setIsChecking(false);
           if (isBattleMode) {
             setCurrentPlayer(prev => (prev === 'lion' ? 'dog' : 'lion'));
           }
-        }, 1000);
+        }, 700); // 少し短く
       }
     }
-  };
+  }, [clickQueue, flippedCards, cards, matchedPairs, isBattleMode, playerPairs, currentPlayer]);
 
   const handleSwitchKana = () => {
     setIsHiragana(!isHiragana);

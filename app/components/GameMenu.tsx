@@ -56,14 +56,23 @@ export default function GameMenu({
   const handleSwitchGame = () => {
     const availableGames = GAMES.filter(game => game.id !== currentGame);
     const randomGame = availableGames[Math.floor(Math.random() * availableGames.length)];
-    router.push(`/games/${randomGame.id}`);
+    
+    // クリーンアップを実行してから画面遷移
     onClose();
+    // 画面遷移を遅延させる
+    requestAnimationFrame(() => {
+      router.replace(`/games/${randomGame.id}`);
+    });
   };
 
   const handleGameSelect = (gameId: GameType) => {
     if (gameId !== currentGame) {
-      router.push(`/games/${gameId}`);
+      // クリーンアップを実行してから画面遷移
       onClose();
+      // 画面遷移を遅延させる
+      requestAnimationFrame(() => {
+        router.replace(`/games/${gameId}`);
+      });
     }
   };
 

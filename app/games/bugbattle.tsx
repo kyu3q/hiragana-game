@@ -369,9 +369,9 @@ export default function BugBattle() {
       x,
       y,
       color,
-      size: type === 'failure' ? Math.random() * 8 + 4 : Math.random() * 4 + 2, // 失敗時はパーティクルを大きく
+      size: type === 'failure' ? Math.random() * 8 + 4 : Math.random() * 4 + 2,
       velocity: {
-        x: (Math.random() - 0.5) * (type === 'failure' ? 12 : 8), // 失敗時は速度を上げる
+        x: (Math.random() - 0.5) * (type === 'failure' ? 12 : 8),
         y: (Math.random() - 0.5) * (type === 'failure' ? 12 : 8),
       },
       opacity: new Animated.Value(1),
@@ -385,7 +385,7 @@ export default function BugBattle() {
       Animated.parallel([
         Animated.sequence([
           Animated.timing(particle.scale, {
-            toValue: type === 'failure' ? 1.5 : 1, // 失敗時はスケールを大きく
+            toValue: type === 'failure' ? 1.5 : 1,
             duration: type === 'failure' ? 300 : 200,
             useNativeDriver: true,
           }),
@@ -397,11 +397,11 @@ export default function BugBattle() {
         ]),
         Animated.timing(particle.opacity, {
           toValue: 0,
-          duration: type === 'failure' ? 700 : 500, // 失敗時は長く表示
+          duration: type === 'failure' ? 700 : 500,
           useNativeDriver: true,
         }),
         Animated.timing(particle.rotation, {
-          toValue: type === 'failure' ? 720 : 360, // 失敗時は回転を増やす
+          toValue: type === 'failure' ? 720 : 360,
           duration: type === 'failure' ? 700 : 500,
           useNativeDriver: true,
         }),
@@ -534,13 +534,13 @@ export default function BugBattle() {
 
   // 初期化
   useEffect(() => {
-    // ゲームの初期化
+
     initializeGame();
     startGameLoop();
 
     // クリーンアップ関数
     return () => {
-      // 全てのインターバルをクリア
+      // インターバルのクリア
       if (gameLoopRef.current) {
         cancelAnimationFrame(gameLoopRef.current);
         gameLoopRef.current = null;
@@ -554,9 +554,11 @@ export default function BugBattle() {
         timerIntervalRef.current = null;
       }
 
-      // 全ての状態をリセット
+      // 敵と味方をクリア
       setEnemies([]);
       setBugs([]);
+
+      // すべてのゲーム状態をリセット
       setGameOver(false);
       setIsGameOverScreen(false);
       setIsGameClearScreen(false);
@@ -568,6 +570,16 @@ export default function BugBattle() {
       setEnemyTower({ hp: 100, maxHp: 100 });
       setIsRetrying(false);
       setSwitchingKana(false);
+
+      // クールダウンフレームの初期化
+      setFrames(prevFrames => prevFrames.map(frame => ({
+        ...frame,
+        lastUsed: 0,
+        question: null,
+        letters: [],
+        slots: Array(frame.slots.length).fill(null),
+        currentIndex: 0
+      })));
     };
   }, []);
 
@@ -756,9 +768,9 @@ export default function BugBattle() {
     const distance = Math.sqrt(dx * dx + dy * dy);
     
     // 虫の大きさを考慮した衝突判定
-    const bugRadius = BUG_SIZES[bug.type] * 0.5; // 半径を計算
-    const enemyRadius = ENEMY_SIZES[enemy.type] * 0.5; // 半径を計算
-    const collisionThreshold = (bugRadius + enemyRadius) * 1.2; // 衝突判定の距離を20%増加
+    const bugRadius = BUG_SIZES[bug.type] * 0.5;
+    const enemyRadius = ENEMY_SIZES[enemy.type] * 0.5;
+    const collisionThreshold = (bugRadius + enemyRadius) * 1.2;
     
     return distance < collisionThreshold;
   };
@@ -773,7 +785,7 @@ export default function BugBattle() {
       const towerLeftEdge = isSmallScreen ? 80 : 140;
       const collisionOffset = isSmallScreen ? 20 : 40;
       if (bug.x <= towerLeftEdge - collisionOffset) {
-        updateTowerHp(true, 3); // タワーへのダメージを8から3に減少
+        updateTowerHp(true, 3);
         animateBugDisappearance(bug);
         return;
       }
@@ -814,7 +826,7 @@ export default function BugBattle() {
       const towerRightEdge = screenWidth - (isSmallScreen ? 100 : 40);
       const collisionOffset = isSmallScreen ? 80 : 120;
       if (enemy.x >= towerRightEdge - collisionOffset) {
-        updateTowerHp(false, 3); // タワーへのダメージを8から3に減少
+        updateTowerHp(false, 3);
         animateEnemyDisappearance(enemy);
         return;
       }
@@ -1026,7 +1038,7 @@ export default function BugBattle() {
       return; // 最大数に達している場合は生成しない
     }
 
-    lastBugSpawnTimeRef.current = now; // 生成時間を更新
+    lastBugSpawnTimeRef.current = now;
 
     const difficulty = getCurrentDifficulty();
     bugIdRef.current += 1;

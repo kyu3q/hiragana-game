@@ -1845,6 +1845,7 @@ export default function BugBattle() {
             </View>
           </View>
 
+          {/* クイズエリア（下部） */}
           <View style={[styles.questionArea]}>
             {/* 特殊能力ボタンエリア */}
             <View style={styles.abilityButtonsContainer}>
@@ -1879,6 +1880,7 @@ export default function BugBattle() {
               ))}
             </View>
 
+            {/* クイズ枠 */}
             <View style={styles.framesContainer}>
               {frames.map((frame, frameIndex) => (
                 <View
@@ -1933,7 +1935,7 @@ export default function BugBattle() {
                                     correctAnswerAnimations[frameIndex]?.[index] && {
                                       color: correctAnswerAnimations[frameIndex][index].interpolate({
                                         inputRange: [0, 1],
-                                        outputRange: [frame.id != 2 ? '#8B4513': '#4169E1' , '#4CAF50'],
+                                        outputRange: [frame.id != 2 ? '#8B4513': '#4169E1' , '#BEAE52'],
                                       }),
                                     },
                                   ]}
@@ -2014,13 +2016,6 @@ const styles = StyleSheet.create({
     flex: 1,
     position: 'relative',
   } as ViewStyle,
-  settingsButton: {
-    position: 'absolute',
-    top: 10,
-    right: 10,
-    zIndex: 10000,
-    padding: 10,
-  } as ViewStyle,
   gameArea: {
     flex: 1,
     position: 'relative',
@@ -2028,6 +2023,8 @@ const styles = StyleSheet.create({
     width: '100%',
     height: isSmallScreen ? screenHeight - 200 : screenHeight - 400,
   } as ViewStyle,
+
+  // バトルエリア関連
   battleArea: {
     position: 'absolute',
     top: 0,
@@ -2037,6 +2034,44 @@ const styles = StyleSheet.create({
     zIndex: 1,
     overflow: 'visible',
   } as ViewStyle,
+  bug: {
+    position: 'absolute',
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    zIndex: 2,
+    backgroundColor: 'transparent',
+    transform: [{ scale: 0.9 }],
+  } as ViewStyle,
+  bugImage: {
+    width: '100%',
+    height: '100%',
+    transform: [{ scale: 1.1 }],
+  } as ImageStyle,
+  enemy: {
+    position: 'absolute',
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    zIndex: 3,
+    backgroundColor: 'transparent',
+    transform: [{ scale: 0.9 }],
+  } as ViewStyle,
+  enemyImage: {
+    width: '100%',
+    height: '100%',
+    transform: [{ scale: 1.1 }],
+  } as ImageStyle,
+
+  // クイズエリア関連
   questionArea: {
     position: 'absolute',
     bottom: 0,
@@ -2134,7 +2169,7 @@ const styles = StyleSheet.create({
   correctAnswer: {
     backgroundColor: 'rgba(76, 175, 80, 0.2)',
     transform: [{ scale: 1.1 }],
-    borderColor: '#4CAF50',
+    borderColor: '#BEAE52',
   } as ViewStyle,
   filledSlot: {
     borderColor: '#8B4513',
@@ -2184,6 +2219,44 @@ const styles = StyleSheet.create({
     fontSize: isSmallScreen ? 20 : 32,
     fontWeight: 'bold',
   } as TextStyle,
+  // クルーダウン関連
+  cooldownFrame: {
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+  } as ViewStyle,
+  cooldownContent: {
+    width: '100%',
+    alignItems: 'center',
+    gap: isSmallScreen ? 5 : 10,
+  } as ViewStyle,
+  cooldownBugImage: {
+    width: isSmallScreen ? 50 : 120,
+    height: isSmallScreen ? 50 : 120,
+    opacity: 1,
+  } as ImageStyle,
+  cooldownBugImageDisabled: {
+    opacity: 0.5,
+  } as ImageStyle,
+  cooldownTimerContainer: {
+    width: '80%',
+    alignItems: 'center',
+    marginTop: isSmallScreen ? 0 : 0,
+  } as ViewStyle,
+  cooldownTimerBackground: {
+    width: '100%',
+    height: isSmallScreen ? 8 : 12,
+    backgroundColor: '#e0e0e0',
+    borderRadius: isSmallScreen ? 4 : 6,
+    overflow: 'hidden',
+  } as ViewStyle,
+  cooldownTimerFill: {
+    height: '100%',
+    borderRadius: 6,
+  } as ViewStyle,
+
+  // アニメーション関連
   levelUpContainer: {
     position: 'absolute',
     top: isSmallScreen ? '25%' : '30%',
@@ -2234,58 +2307,15 @@ const styles = StyleSheet.create({
     borderRadius: 50,
     transform: [{ scale: 1 }],
   } as ViewStyle,
-  bug: {
+
+  // その他のUI要素
+  settingsButton: {
     position: 'absolute',
-    justifyContent: 'center',
-    alignItems: 'center',
-    elevation: 5,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    zIndex: 2,
-    backgroundColor: 'transparent',
-    transform: [{ scale: 0.9 }],
+    top: 10,
+    right: 10,
+    zIndex: 10000,
+    padding: 10,
   } as ViewStyle,
-  bugImage: {
-    width: '100%',
-    height: '100%',
-    transform: [{ scale: 1.1 }],
-  } as ImageStyle,
-  enemy: {
-    position: 'absolute',
-    justifyContent: 'center',
-    alignItems: 'center',
-    elevation: 5,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    zIndex: 3,
-    backgroundColor: 'transparent',
-    transform: [{ scale: 0.9 }],
-  } as ViewStyle,
-  enemyImage: {
-    width: '100%',
-    height: '100%',
-    transform: [{ scale: 1.1 }],
-  } as ImageStyle,
-  battleResultContainer: {
-    position: 'absolute',
-    top: '20%',
-    left: 0,
-    right: 0,
-    alignItems: 'center',
-    justifyContent: 'center',
-    zIndex: 100,
-  } as ViewStyle,
-  battleResultText: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    textShadowColor: 'rgba(0, 0, 0, 0.5)',
-    textShadowOffset: { width: 1, height: 1 },
-    textShadowRadius: 2,
-  },
   abilityButtonsContainer: {
     flexDirection: 'row',
     justifyContent: 'space-around',
@@ -2347,7 +2377,7 @@ const styles = StyleSheet.create({
   } as ViewStyle,
   scoreAnimation: {
     position: 'absolute',
-    color: '#4CAF50',
+    color: '#BEAE52',
     fontSize: 20,
     fontWeight: 'bold',
   },
@@ -2364,6 +2394,8 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#333',
   } as TextStyle,
+
+  // タワー関連
   tower: {
     position: 'absolute',
     width: 100,
@@ -2417,6 +2449,8 @@ const styles = StyleSheet.create({
     textShadowOffset: { width: 1, height: 1 },
     textShadowRadius: 2,
   } as TextStyle,
+
+  // 結果エリア
   resultsContainer: {
     padding: 32,
     backgroundColor: '#fff',
@@ -2455,41 +2489,6 @@ const styles = StyleSheet.create({
     fontSize: 24,
     marginRight: 10,
   },
-  cooldownFrame: {
-    width: '100%',
-    height: '100%',
-    justifyContent: 'center',
-    alignItems: 'center',
-  } as ViewStyle,
-  cooldownContent: {
-    width: '100%',
-    alignItems: 'center',
-    gap: isSmallScreen ? 5 : 10,
-  } as ViewStyle,
-  cooldownBugImage: {
-    width: isSmallScreen ? 50 : 120,
-    height: isSmallScreen ? 50 : 120,
-    opacity: 1,
-  } as ImageStyle,
-  cooldownBugImageDisabled: {
-    opacity: 0.5,
-  } as ImageStyle,
-  cooldownTimerContainer: {
-    width: '80%',
-    alignItems: 'center',
-    marginTop: isSmallScreen ? 0 : 0,
-  } as ViewStyle,
-  cooldownTimerBackground: {
-    width: '100%',
-    height: isSmallScreen ? 8 : 12,
-    backgroundColor: '#e0e0e0',
-    borderRadius: isSmallScreen ? 4 : 6,
-    overflow: 'hidden',
-  } as ViewStyle,
-  cooldownTimerFill: {
-    height: '100%',
-    borderRadius: 6,
-  } as ViewStyle,
   winnerImagesContainer: {
     flexDirection: 'row',
     justifyContent: 'center',

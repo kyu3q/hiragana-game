@@ -13,6 +13,7 @@ const GAMES = [
   { id: 'shiritori', name: '親子しりとり' },
   { id: 'memory', name: 'メモリ対決' },
   { id: 'bugbattle', name: '昆虫バトル' },
+  { id: 'bugbattle-pvp', name: '昆虫バトル' },
 ] as const;
 
 type GameType = typeof GAMES[number]['id'];
@@ -61,7 +62,7 @@ export default function GameMenu({
     onClose();
     // 画面遷移を遅延させる
     requestAnimationFrame(() => {
-      router.replace(`/games/${randomGame.id}`);
+      router.replace(`/games/${randomGame.id}` as any);
     });
   };
 
@@ -71,7 +72,7 @@ export default function GameMenu({
       onClose();
       // 画面遷移を遅延させる
       requestAnimationFrame(() => {
-        router.replace(`/games/${gameId}`);
+        router.replace(`/games/${gameId}` as any);
       });
     }
   };

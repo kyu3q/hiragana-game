@@ -327,6 +327,7 @@ export default function BugBattle() {
   const textBounceAnim = useRef(new Animated.Value(0)).current;
   const [isRetrying, setIsRetrying] = useState(false);
   const [isSwitchingKana, setSwitchingKana] = useState(false);
+  const [isSingleMode, setIsSingleMode] = useState(true);
 
   // 結果画面のアニメーション
   useEffect(() => {
@@ -1603,6 +1604,11 @@ export default function BugBattle() {
     });
   };
 
+  const handleSwitchMode = () => {
+    setIsSingleMode(!isSingleMode);
+    router.replace('/games/bugbattle-pvp');
+  };
+
   return (
     <GameLayout>
       <View style={styles.container}>
@@ -1622,7 +1628,9 @@ export default function BugBattle() {
           onClose={() => setIsSettingsVisible(false)}
           onRetry={handleRetry}
           onSwitchKana={handleSwitchKana}
+          onSwitchMode={handleSwitchMode}
           isHiragana={isHiragana}
+          isSingleMode={isSingleMode}
           currentGame="bugbattle"
         />
         {/* ゲームオーバー画面 */}

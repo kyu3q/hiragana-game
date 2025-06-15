@@ -390,6 +390,7 @@ export default function BugBattlePvP() {
   const textBounceAnim = useRef(new Animated.Value(0)).current;
   const [isRetrying, setIsRetrying] = useState(false);
   const [isSwitchingKana, setSwitchingKana] = useState(false);
+  const [isSingleMode, setIsSingleMode] = useState(false);
 
   // 結果画面のアニメーション
   useEffect(() => {
@@ -1095,6 +1096,11 @@ export default function BugBattlePvP() {
     setIsHiragana(!isHiragana);
   };
 
+  const handleSwitchMode = () => {
+    setIsSingleMode(!isSingleMode);
+    router.replace('/games/bugbattle');
+  };
+
   // 味方の生成間隔（ミリ秒）
   const BUG_SPAWN_COOLDOWN = 1000; // 1秒間隔
   const lastBugSpawnTimeRef = useRef<number>(0);
@@ -1629,8 +1635,10 @@ export default function BugBattlePvP() {
           onClose={() => setIsSettingsVisible(false)}
           onRetry={handleRetry}
           onSwitchKana={handleSwitchKana}
+          onSwitchMode={handleSwitchMode}
           isHiragana={isHiragana}
-          currentGame="bugbattle-pvp"
+          isSingleMode={isSingleMode}
+          currentGame="bugbattle"
         />
 
         <View style={styles.gameContainer}>

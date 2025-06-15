@@ -151,7 +151,7 @@ const HistoryDisplay = ({ history, wrongWord }: { history: HistoryItem[]; wrongW
 
 const ShiritoriGame = () => {
   const router = useRouter();
-  const { isHiragana, setIsHiragana } = useGame();
+  const { isHiragana, setIsHiragana, isSingleMode, setIsSingleMode } = useGame();
   const [currentWord, setCurrentWord] = useState('');
   const [choices, setChoices] = useState<string[]>([]);
   const [currentPlayer, setCurrentPlayer] = useState<PlayerType>('parent');
@@ -168,6 +168,7 @@ const ShiritoriGame = () => {
   const textBounceAnim = useRef(new Animated.Value(0)).current;
   const [isSettingsVisible, setIsSettingsVisible] = useState(false);
   const [sound, setSound] = useState<Audio.Sound | null>(null);
+  const [isSwitchingKana, setSwitchingKana] = useState(false);
 
   const shiritoriData = isHiragana ? hiraganaData as ShiritoriData : katakanaData as ShiritoriData;
   const yoonMap = isHiragana ? yoonMapHiragana : yoonMapKatakana;
@@ -428,6 +429,23 @@ const ShiritoriGame = () => {
     handleRetry();
   };
 
+  const handleSwitchMode = () => {
+    setIsSingleMode(!isSingleMode);
+    // ゲームの状態をリセット
+    setCurrentWord(getRandomWord());
+    generateChoices(getRandomWord());
+    setStartTime(Date.now());
+    setElapsed(0);
+    setHistory([{ word: getRandomWord() }]);
+    setTurn(1);
+    setCurrentPlayer('parent');
+    setIsGameOver(false);
+    setIsResult(false);
+    setWinner('');
+    setTimes({ parent: [], child: [] });
+    setWrongWord('');
+  };
+
   if (isResult) {
     const parentTotal = times.parent.reduce((a, b) => a + b, 0);
     const childTotal = times.child.reduce((a, b) => a + b, 0);
@@ -445,7 +463,9 @@ const ShiritoriGame = () => {
             onClose={() => setIsSettingsVisible(false)}
             onRetry={handleRetry}
             onSwitchKana={handleSwitchKana}
+            onSwitchMode={handleSwitchMode}
             isHiragana={isHiragana}
+            isSingleMode={isSingleMode}
             currentGame="shiritori"
           />
           <HistoryDisplay history={history} wrongWord={wrongWord} />
@@ -514,7 +534,9 @@ const ShiritoriGame = () => {
           onClose={() => setIsSettingsVisible(false)}
           onRetry={handleRetry}
           onSwitchKana={handleSwitchKana}
+          onSwitchMode={handleSwitchMode}
           isHiragana={isHiragana}
+          isSingleMode={isSingleMode}
           currentGame="shiritori"
         />
         <HistoryDisplay history={history} wrongWord={wrongWord} />

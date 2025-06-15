@@ -97,7 +97,7 @@ type Card = {
 type PlayerType = 'lion' | 'dog';
 
 const MemoryGame = () => {
-  const { isHiragana, setIsHiragana } = useGame();
+  const { isHiragana, setIsHiragana, isSingleMode, setIsSingleMode } = useGame();
   const [cards, setCards] = useState<Card[]>([]);
   const [flippedCards, setFlippedCards] = useState<Card[]>([]);
   const [matchedPairs, setMatchedPairs] = useState<number[]>([]);
@@ -119,6 +119,12 @@ const MemoryGame = () => {
   const buttonAnim = useRef(new Animated.Value(0)).current;
   const buttonScale = useRef(new Animated.Value(1)).current;
   const [clickQueue, setClickQueue] = useState<Card[]>([]);
+  const [isSwitchingKana, setSwitchingKana] = useState(false);
+
+  // isSingleModeに基づいてisBattleModeを設定
+  useEffect(() => {
+    setIsBattleMode(!isSingleMode);
+  }, [isSingleMode]);
 
   // 文字の種類に応じて文字を取得
   const getCharacters = (type: 'hiragana' | 'katakana') => {
@@ -250,33 +256,6 @@ const MemoryGame = () => {
     setMatchedColors({});
     setIsChecking(false);
     setIsBattleButtonPressed(false);
-    setClickQueue([]);
-  };
-
-  const handleBattleModeToggle = () => {
-    const newBattleMode = !isBattleMode;
-    setIsBattleMode(newBattleMode);
-    
-    // アニメーション値をリセット
-    Object.keys(flipAnimations).forEach(key => {
-      flipAnimations[Number(key)].setValue(0);
-    });
-    bounceAnim.setValue(0);
-    textBounceAnim.setValue(0);
-    buttonAnim.setValue(0);
-    buttonScale.setValue(1);
-
-    // 状態をリセット
-    setCurrentPlayer('lion');
-    setPlayerPairs({ lion: 0, dog: 0 });
-    setCards(createCardPairs());
-    setFlippedCards([]);
-    setMatchedPairs([]);
-    setMatchedColors({});
-    setIsChecking(false);
-    setIsBattleButtonPressed(false);
-    setShowResult(false);
-    setWinner(null);
     setClickQueue([]);
   };
 
@@ -445,6 +424,30 @@ const MemoryGame = () => {
     ]).start();
   };
 
+  const handleSwitchMode = () => {
+    setIsSingleMode(!isSingleMode);
+    // ゲームの状態をリセット
+    Object.keys(flipAnimations).forEach(key => {
+      flipAnimations[Number(key)].setValue(0);
+    });
+    bounceAnim.setValue(0);
+    textBounceAnim.setValue(0);
+    buttonAnim.setValue(0);
+    buttonScale.setValue(1);
+
+    setCurrentPlayer('lion');
+    setPlayerPairs({ lion: 0, dog: 0 });
+    setCards(createCardPairs());
+    setFlippedCards([]);
+    setMatchedPairs([]);
+    setMatchedColors({});
+    setIsChecking(false);
+    setIsBattleButtonPressed(false);
+    setShowResult(false);
+    setWinner(null);
+    setClickQueue([]);
+  };
+
   const renderCard = (card: Card) => {
     if (!flipAnimations[card.id]) {
       flipAnimations[card.id] = new Animated.Value(0);
@@ -557,7 +560,9 @@ const MemoryGame = () => {
             onClose={() => setIsSettingsVisible(false)}
             onRetry={handleRetry}
             onSwitchKana={handleSwitchKana}
+            onSwitchMode={handleSwitchMode}
             isHiragana={isHiragana}
+            isSingleMode={isSingleMode}
             currentGame="memory"
           />
           <View style={styles.resultArea}>
@@ -609,7 +614,9 @@ const MemoryGame = () => {
           onClose={() => setIsSettingsVisible(false)}
           onRetry={handleRetry}
           onSwitchKana={handleSwitchKana}
+          onSwitchMode={handleSwitchMode}
           isHiragana={isHiragana}
+          isSingleMode={isSingleMode}
           currentGame="memory"
         />
         <View style={styles.header}>
@@ -646,14 +653,6 @@ const MemoryGame = () => {
               >
                 <Text style={[styles.typeButtonText, selectedType === 'anpanman' && styles.typeButtonTextActive]}>
                   アンパンマン
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.battleButton, isBattleMode && styles.battleButtonActive]}
-                onPress={handleBattleModeToggle}
-              >
-                <Text style={[styles.battleButtonText, isBattleMode && styles.battleButtonTextActive]}>
-                  {isBattleMode ? 'ひとりで遊び' : '対決'}
                 </Text>
               </TouchableOpacity>
             </View>

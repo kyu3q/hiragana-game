@@ -13,7 +13,6 @@ const GAMES = [
   { id: 'shiritori', name: '親子しりとり' },
   { id: 'memory', name: 'メモリ対決' },
   { id: 'bugbattle', name: '昆虫バトル' },
-  { id: 'bugbattle-pvp', name: '昆虫バトル' },
 ] as const;
 
 type GameType = typeof GAMES[number]['id'];
@@ -23,7 +22,9 @@ interface GameMenuProps {
   onClose: () => void;
   onRetry: () => void;
   onSwitchKana: () => void;
+  onSwitchMode: () => void;
   isHiragana: boolean;
+  isSingleMode: boolean;
   currentGame: GameType;
 }
 
@@ -32,7 +33,9 @@ export default function GameMenu({
   onClose,
   onRetry,
   onSwitchKana,
+  onSwitchMode,
   isHiragana,
+  isSingleMode,
   currentGame,
 }: GameMenuProps) {
   const router = useRouter();
@@ -55,24 +58,37 @@ export default function GameMenu({
   }, [visible]);
 
   const handleSwitchGame = () => {
-    const availableGames = GAMES.filter(game => game.id !== currentGame);
-    const randomGame = availableGames[Math.floor(Math.random() * availableGames.length)];
+    // 現在のゲームのインデックスを取得
+    const currentIndex = GAMES.findIndex(game => game.id === currentGame);
+    // 次のゲームのインデックスを計算（最後の場合は最初に戻る）
+    const nextIndex = (currentIndex + 1) % GAMES.length;
+    const nextGame = GAMES[nextIndex];
+    
+    // 昆虫バトルの場合、モードに応じて適切なバージョンを選択
+    const targetGameId = nextGame.id === 'bugbattle'
+      ? (isSingleMode ? 'bugbattle' : 'bugbattle-pvp')
+      : nextGame.id;
     
     // クリーンアップを実行してから画面遷移
     onClose();
     // 画面遷移を遅延させる
     requestAnimationFrame(() => {
-      router.replace(`/games/${randomGame.id}` as any);
+      router.replace(`/games/${targetGameId}` as any);
     });
   };
 
   const handleGameSelect = (gameId: GameType) => {
     if (gameId !== currentGame) {
+      // 昆虫バトルの場合、モードに応じて適切なバージョンを選択
+      const targetGameId = gameId === 'bugbattle'
+        ? (isSingleMode ? 'bugbattle' : 'bugbattle-pvp')
+        : gameId;
+
       // クリーンアップを実行してから画面遷移
       onClose();
       // 画面遷移を遅延させる
       requestAnimationFrame(() => {
-        router.replace(`/games/${gameId}` as any);
+        router.replace(`/games/${targetGameId}` as any);
       });
     }
   };
@@ -108,13 +124,25 @@ export default function GameMenu({
             <TouchableOpacity
               style={styles.menuItem}
               onPress={() => {
+                onSwitchMode();
+                onClose();
+              }}
+            >
+              <Ionicons name="people" size={24} color="#333" />
+              <Text style={styles.menuText}>
+                {isSingleMode ? '2人で遊ぶ' : '1人で遊ぶ'}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => {
                 onSwitchKana();
                 onClose();
               }}
             >
               <Ionicons name="text" size={24} color="#333" />
               <Text style={styles.menuText}>
-                {isHiragana ? 'カタカナに切替' : 'ひらがなに切替'}
+                {isHiragana ? 'カタカナ' : 'ひらがな'}
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
@@ -127,26 +155,6 @@ export default function GameMenu({
               <Ionicons name="game-controller" size={24} color="#333" />
               <Text style={styles.menuText}>ゲーム切替</Text>
             </TouchableOpacity>
-            <View style={styles.gameButtonsContainer}>
-              {GAMES.map((game) => (
-                <TouchableOpacity
-                  key={game.id}
-                  style={[
-                    game.id === currentGame ? styles.currentGameButton : styles.gameButton,
-                  ]}
-                  onPress={() => handleGameSelect(game.id)}
-                  disabled={game.id === currentGame}
-                >
-                  <Text
-                    style={[
-                      game.id === currentGame ? styles.currentGameButtonText : styles.gameButtonText,
-                    ]}
-                  >
-                    {game.name}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
           </View>
         </TouchableOpacity>
       </Animated.View>
@@ -203,37 +211,5 @@ const styles = StyleSheet.create({
     marginLeft: 15,
     fontSize: 16,
     color: '#333',
-  },
-  gameButtonsContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'center',
-    gap: 8,
-    marginTop: 10,
-    paddingHorizontal: isSmallScreen ? 10 : 20,
-  },
-  gameButton: {
-    backgroundColor: '#e0e0e0',
-    paddingVertical: 8,
-    paddingHorizontal: isSmallScreen ? 12 : 16,
-    borderRadius: 5,
-    minWidth: isSmallScreen ? 80 : 100,
-  },
-  currentGameButton: {
-    backgroundColor: '#4a90e2',
-    paddingVertical: 8,
-    paddingHorizontal: isSmallScreen ? 12 : 16,
-    borderRadius: 5,
-    minWidth: isSmallScreen ? 80 : 100,
-  },
-  gameButtonText: {
-    color: '#333',
-    fontSize: isSmallScreen ? 12 : 14,
-    textAlign: 'center',
-  },
-  currentGameButtonText: {
-    color: '#fff',
-    fontSize: isSmallScreen ? 12 : 14,
-    textAlign: 'center',
-  },
+  }
 }); 

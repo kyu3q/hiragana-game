@@ -4,7 +4,7 @@ import { useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import { Animated, Dimensions, Easing, Image, ImageStyle, StyleSheet, Text, TextStyle, TouchableOpacity, View, ViewStyle } from 'react-native';
 import BugCastleIcon from '../../assets/images/bugbattle/BugCastleIcon';
-import EnemyCastleIcon from '../../assets/images/bugbattle/EnemyCastleIcon';
+import OrangeCastleIcon from '../../assets/images/bugbattle/OrangeCastleIcon';
 import {
   katakanaLevel1Words,
   katakanaLevel2Words,
@@ -386,6 +386,9 @@ export default function BugBattlePvP() {
   const [enemyTowerHit, setEnemyTowerHit] = useState(false);
   const [isGameOverScreen, setIsGameOverScreen] = useState(false);
   const [isGameClearScreen, setIsGameClearScreen] = useState(false);
+  const [isGameOver, setIsGameOver] = useState(false);
+  const [winner, setWinner] = useState<'left' | 'right' | 'draw' | null>(null);
+  const [showResult, setShowResult] = useState(false);
   const bounceAnim = useRef(new Animated.Value(0)).current;
   const textBounceAnim = useRef(new Animated.Value(0)).current;
   const [isRetrying, setIsRetrying] = useState(false);
@@ -394,7 +397,7 @@ export default function BugBattlePvP() {
 
   // 結果画面のアニメーション
   useEffect(() => {
-    if (isGameOverScreen || isGameClearScreen) {
+    if (showResult) {
       Animated.loop(
         Animated.sequence([
           Animated.timing(bounceAnim, {
@@ -425,7 +428,7 @@ export default function BugBattlePvP() {
         ])
       ).start();
     }
-  }, [isGameOverScreen, isGameClearScreen]);
+  }, [showResult]);
 
   const createParticles = (x: number, y: number, color: string, count: number = 10, type: 'success' | 'failure' = 'success') => {
     const newParticles: Particle[] = Array.from({ length: count }, () => ({
@@ -657,6 +660,8 @@ export default function BugBattlePvP() {
     setIsRetrying(true);
     setIsGameOverScreen(false);
     setIsGameClearScreen(false);
+    setShowResult(false);
+    setWinner(null);
   };
 
   // ゲームの初期化
@@ -822,13 +827,21 @@ export default function BugBattlePvP() {
     damage: number
   ) => {
     setPlayer(prev => {
-      // 1回の攻撃で適切なダメージだけ減るように修正
       const newHp = Math.max(0, prev.tower.hp - damage);
       if (newHp <= 0 && prev.tower.hp > 0) {
-        // HPが0になった瞬間のみゲーム終了処理
         setGameOver(true);
-        setIsGameOverScreen(true);
-        setIsGameClearScreen(false);
+        setShowResult(true);
+        const leftTowerHp = leftPlayer.tower.hp;
+        const rightTowerHp = rightPlayer.tower.hp;
+        
+        if (leftTowerHp <= 0 && rightTowerHp <= 0) {
+          setWinner('draw');
+        } else if (rightTowerHp <= 0) {
+          setWinner('left');
+        } else {
+          setWinner('right');
+        }
+
         if (gameLoopRef.current) {
           cancelAnimationFrame(gameLoopRef.current);
           gameLoopRef.current = null;
@@ -842,7 +855,6 @@ export default function BugBattlePvP() {
           timerIntervalRef.current = null;
         }
       }
-      // タワー攻撃音は必ず鳴らす
       playSound(soundsRef.current.playerTowerHit);
       return {
         ...prev,
@@ -1327,18 +1339,22 @@ export default function BugBattlePvP() {
   };
 
   const showBattleResult = (type: 'success' | 'failure', message: string) => {
-    setBattleResult({
-      visible: true,
-      type,
-      message,
-    });
-    setTimeout(() => {
-      setBattleResult({
-        visible: false,
-        type: 'success',
-        message: '',
-      });
-    }, 2000);
+    if (type === 'failure') {
+      setIsGameOver(true);
+      setShowResult(true);
+      const leftTowerHp = leftPlayer.tower.hp;
+      const rightTowerHp = rightPlayer.tower.hp;
+      
+      if (leftTowerHp <= 0 && rightTowerHp <= 0) {
+        setWinner('draw');
+      } else if (rightTowerHp <= 0) {
+        setWinner('left');
+      } else {
+        setWinner('right');
+      }
+      
+      playSound(soundsRef.current.enemyTowerHit);
+    }
   };
 
   // 文字カードのクリック処理
@@ -1375,24 +1391,31 @@ export default function BugBattlePvP() {
 
   // 特殊能力を使用する関数を修正
   const useAbility = (bug: Bug) => {
-    if (isGameOverScreen || isGameClearScreen) return;
     const now = Date.now();
     if (now - bug.lastAbilityUse < bug.ability.cooldown) {
       return;
     }
-    bug.ability.effect(bug, leftPlayer.enemies.concat(rightPlayer.enemies));
-    // 左右どちらの虫かでlastAbilityUseを正しく更新
-    if (leftPlayer.bugs.some(b => b.id === bug.id)) {
-      setLeftPlayer(prev => ({
-        ...prev,
-        bugs: prev.bugs.map(b => b.id === bug.id ? { ...b, lastAbilityUse: now } : b)
-      }));
-    } else if (rightPlayer.bugs.some(b => b.id === bug.id)) {
-      setRightPlayer(prev => ({
-        ...prev,
-        bugs: prev.bugs.map(b => b.id === bug.id ? { ...b, lastAbilityUse: now } : b)
-      }));
+
+    // 虫の種類に基づいて音声を再生
+    switch (bug.type) {
+      case 'player1_bug1':
+        playSound(soundsRef.current.abilityLadybug);
+        break;
+      case 'player1_bug2':
+        playSound(soundsRef.current.abilityWasp);
+        break;
+      case 'player2_bug1':
+        playSound(soundsRef.current.abilityButterfly);
+        break;
+      case 'player2_bug2':
+        playSound(soundsRef.current.abilityFirefly);
+        break;
     }
+
+    bug.lastAbilityUse = now;
+    // 左右どちらの虫かで敵を正しく選択
+    const isLeftBug = leftPlayer.bugs.some(b => b.id === bug.id);
+    bug.ability.effect(bug, isLeftBug ? leftPlayer.enemies : rightPlayer.enemies);
   };
 
   // 特殊能力の定義
@@ -1620,6 +1643,97 @@ export default function BugBattlePvP() {
   // バトルエリアの虫・敵のy座標を制限
   const clampY = (y: number) => Math.max(0, Math.min(y, BATTLE_AREA_HEIGHT - 80));
 
+  if (showResult) {
+    const bounceStyle = {
+      transform: [
+        {
+          translateY: bounceAnim.interpolate({
+            inputRange: [0, 1],
+            outputRange: [0, -20],
+          }),
+        },
+      ],
+    };
+
+    const textBounceStyle = {
+      transform: [
+        {
+          translateY: textBounceAnim.interpolate({
+            inputRange: [0, 1],
+            outputRange: [0, -10],
+          }),
+        },
+      ],
+    };
+
+    return (
+      <GameLayout>
+        <View style={styles.container}>
+          <TouchableOpacity
+            style={styles.settingsButton}
+            onPress={() => setIsSettingsVisible(true)}
+          >
+            <Ionicons name="ellipsis-horizontal" size={24} color="#333" />
+          </TouchableOpacity>
+          <GameMenu
+            visible={isSettingsVisible}
+            onClose={() => setIsSettingsVisible(false)}
+            onRetry={handleRetry}
+            onSwitchKana={handleSwitchKana}
+            onSwitchMode={handleSwitchMode}
+            isHiragana={isHiragana}
+            isSingleMode={isSingleMode}
+            currentGame="bugbattle"
+          />
+          <View style={styles.resultArea}>
+            <View style={styles.resultContent}>
+              <View style={styles.winnerImagesContainer}>
+                {winner === 'left' ? (
+                  // 左プレイヤーの虫を表示
+                  Object.values(BUG_IMAGES).slice(0, 2).map((image, index) => (
+                    <Image
+                      key={index}
+                      source={image}
+                      style={[styles.winnerImage, { transform: [{ rotate: '270deg' }] }]}
+                      resizeMode="contain"
+                    />
+                  ))
+                ) : winner === 'right' ? (
+                  // 右プレイヤーの虫を表示
+                  Object.values(BUG_IMAGES).slice(2, 4).map((image, index) => (
+                    <Image
+                      key={index}
+                      source={image}
+                      style={[styles.winnerImage, { transform: [{ rotate: '90deg' }] }]}
+                      resizeMode="contain"
+                    />
+                  ))
+                ) : (
+                  // 引き分けの場合は両方の虫を表示
+                  Object.values(BUG_IMAGES).map((image, index) => (
+                    <Image
+                      key={index}
+                      source={image}
+                      style={[styles.winnerImage, { transform: [{ rotate: index < 2 ? '270deg' : '90deg' }] }]}
+                      resizeMode="contain"
+                    />
+                  ))
+                )}
+              </View>
+              <Animated.Text style={[
+                styles.winnerText,
+                winner === 'left' ? styles.lionColor : winner === 'right' ? styles.dogColor : styles.drawColor,
+                textBounceStyle
+              ]}>
+                <Text>🎉{winner === 'draw' ? '引き分け！' : `${winner === 'left' ? '🦁' : '🐶'}の勝ち！`}</Text>
+              </Animated.Text>
+            </View>
+          </View>
+        </View>
+      </GameLayout>
+    );
+  }
+
   return (
     <GameLayout>
       <View style={styles.container}>
@@ -1648,24 +1762,24 @@ export default function BugBattlePvP() {
               <View style={[styles.tower, { left: isSmallScreen ? 0 : 40 }]}> 
                 <View style={styles.hpBarOuter}>
                   <View style={[styles.hpBarImproved, {
-                    width: `${(playerTower.hp / playerTower.maxHp) * 100}%`,
-                    backgroundColor: playerTower.hp > playerTower.maxHp * 0.3 
-                      ? 'rgba(233, 30, 99, 0.9)'  // ピンク色（敵の通常時）
-                      : 'rgba(233, 30, 99, 0.5)', // 薄いピンク色（敵の危険時）
+                    width: `${(leftPlayer.tower.hp / leftPlayer.tower.maxHp) * 100}%`,
+                    backgroundColor: leftPlayer.tower.hp > leftPlayer.tower.maxHp * 0.3 
+                      ? 'rgba(255, 165, 0, 0.9)'  // オレンジ色（通常時）
+                      : 'rgba(255, 165, 0, 0.5)', // 薄いオレンジ色（危険時）
                     borderRightWidth: 2,
                     borderRightColor: 'rgba(255, 255, 255, 0.3)',
                   }]} />
                   <Text style={styles.hpBarText}>
-                    {playerTower.hp}/{playerTower.maxHp}
+                    {leftPlayer.tower.hp}/{leftPlayer.tower.maxHp}
                   </Text>
                 </View>
                 <Animated.View style={{
                   transform: [{ translateX: playerTowerShake }],
-                  backgroundColor: playerTowerHit ? 'rgba(233, 30, 99, 0.2)' : 'transparent',
+                  backgroundColor: playerTowerHit ? 'rgba(255, 165, 0, 0.2)' : 'transparent',
                   borderRadius: 20,
                 }}>
                   <View style={styles.towerEmojiContainer}>
-                    <EnemyCastleIcon width={isSmallScreen ? 80 : 120} height={isSmallScreen ? 130 : 280} />
+                    <OrangeCastleIcon width={isSmallScreen ? 80 : 120} height={isSmallScreen ? 130 : 280} />
                   </View>
                 </Animated.View>
               </View>
@@ -1674,15 +1788,15 @@ export default function BugBattlePvP() {
               <View style={[styles.tower, { right: isSmallScreen ? 0 : 40 }]}> 
                 <View style={styles.hpBarOuter}>
                   <View style={[styles.hpBarImproved, {
-                    width: `${(enemyTower.hp / enemyTower.maxHp) * 100}%`,
-                    backgroundColor: enemyTower.hp > enemyTower.maxHp * 0.3 
+                    width: `${(rightPlayer.tower.hp / rightPlayer.tower.maxHp) * 100}%`,
+                    backgroundColor: rightPlayer.tower.hp > rightPlayer.tower.maxHp * 0.3 
                       ? 'rgba(33, 150, 243, 0.9)'  // 青色（味方の通常時）
                       : 'rgba(33, 150, 243, 0.5)', // 薄い青色（味方の危険時）
                     borderRightWidth: 2,
                     borderRightColor: 'rgba(255, 255, 255, 0.3)',
                   }]} />
                   <Text style={styles.hpBarText}>
-                    {enemyTower.hp}/{enemyTower.maxHp}
+                    {rightPlayer.tower.hp}/{rightPlayer.tower.maxHp}
                   </Text>
                 </View>
                 <Animated.View style={{
@@ -1849,6 +1963,11 @@ export default function BugBattlePvP() {
                     ]}
                   >
                     <View style={styles.frameContent}> 
+                      <View style={styles.playerIconContainer}>
+                        <Text style={styles.playerIcon}>
+                          {isLeft ? '🦁' : '🐶'}
+                        </Text>
+                      </View>
                       <View style={styles.bugPreview}>
                         <Image
                           source={BUG_IMAGES[bugType]}
@@ -2231,4 +2350,66 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#333',
   } as TextStyle,
+  resultArea: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: '100%',
+  },
+  resultContent: {
+    backgroundColor: 'white',
+    padding: 40,
+    borderRadius: 30,
+    width: '100%',
+    maxWidth: 600,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.1,
+    shadowRadius: 32,
+    elevation: 8,
+  },
+  winnerEmojiContainer: {
+    marginBottom: 20,
+  },
+  winnerEmoji: {
+    fontSize: 80,
+  },
+  resultScores: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 40,
+    marginTop: 20,
+  },
+  resultScoreRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  playerEmoji: {
+    fontSize: 36,
+    fontWeight: 'bold',
+  },
+  lionColor: {
+    color: '#fbbc5d',
+  },
+  dogColor: {
+    color: '#5eb5fc',
+  },
+  drawColor: {
+    color: '#888',
+  },
+  scoreText: {
+    fontSize: 24,
+    fontWeight: 'bold',
+  },
+  playerIconContainer: {
+    position: 'absolute',
+    top: 2,
+    left: 2,
+    zIndex: 2,
+  },
+  playerIcon: {
+    fontSize: isSmallScreen ? 20 : 24,
+  },
 }); 

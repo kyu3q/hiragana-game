@@ -121,30 +121,81 @@ export default function GameMenu({
               <Ionicons name="refresh" size={24} color="#333" />
               <Text style={styles.menuText}>リトライ</Text>
             </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.menuItem}
-              onPress={() => {
-                onSwitchMode();
-                onClose();
-              }}
-            >
-              <Ionicons name="people" size={24} color="#333" />
-              <Text style={styles.menuText}>
-                {isSingleMode ? '2人で遊ぶ' : '1人で遊ぶ'}
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.menuItem}
-              onPress={() => {
-                onSwitchKana();
-                onClose();
-              }}
-            >
-              <Ionicons name="text" size={24} color="#333" />
-              <Text style={styles.menuText}>
-                {isHiragana ? 'カタカナ' : 'ひらがな'}
-              </Text>
-            </TouchableOpacity>
+
+            {/* モード選択 */}
+            <View style={styles.radioGroup}>
+              <View style={styles.radioGroupContent}>
+                <Ionicons name="people" size={24} color="#333" />
+                <View style={styles.radioOptions}>
+                  <TouchableOpacity
+                    style={styles.radioOption}
+                    onPress={() => {
+                      if (isSingleMode) {
+                        onSwitchMode();
+                      }
+                      onClose();
+                    }}
+                  >
+                    <View style={[styles.radioButton, !isSingleMode && styles.radioButtonSelected]}>
+                      {!isSingleMode && <View style={styles.radioButtonInner} />}
+                    </View>
+                    <Text style={styles.radioText}>2人で遊ぶ</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.radioOption}
+                    onPress={() => {
+                      if (!isSingleMode) {
+                        onSwitchMode();
+                      }
+                      onClose();
+                    }}
+                  >
+                    <View style={[styles.radioButton, isSingleMode && styles.radioButtonSelected]}>
+                      {isSingleMode && <View style={styles.radioButtonInner} />}
+                    </View>
+                    <Text style={styles.radioText}>1人で遊ぶ</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+
+            {/* 文字種選択 */}
+            <View style={styles.radioGroup}>
+              <View style={[styles.radioGroupContent,{ gap: 17 }]}>
+                <Ionicons name="text" size={24} color="#333" />
+                <View style={styles.radioOptions}>
+                  <TouchableOpacity
+                    style={styles.radioOption}
+                    onPress={() => {
+                      if (!isHiragana) {
+                        onSwitchKana();
+                      }
+                      onClose();
+                    }}
+                  >
+                    <View style={[styles.radioButton, isHiragana && styles.radioButtonSelected]}>
+                      {isHiragana && <View style={styles.radioButtonInner} />}
+                    </View>
+                    <Text style={styles.radioText}>ひらがな</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.radioOption}
+                    onPress={() => {
+                      if (isHiragana) {
+                        onSwitchKana();
+                      }
+                      onClose();
+                    }}
+                  >
+                    <View style={[styles.radioButton, !isHiragana && styles.radioButtonSelected]}>
+                      {!isHiragana && <View style={styles.radioButtonInner} />}
+                    </View>
+                    <Text style={styles.radioText}>カタカナ</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+
             <TouchableOpacity
               style={styles.menuItem}
               onPress={() => {
@@ -211,5 +262,47 @@ const styles = StyleSheet.create({
     marginLeft: 15,
     fontSize: 16,
     color: '#333',
-  }
+  },
+  radioGroup: {
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
+  },
+  radioGroupContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+  },
+  radioOptions: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  radioOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 5,
+  },
+  radioButton: {
+    width: 18,
+    height: 18,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: '#666',
+    marginRight: 4,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  radioButtonSelected: {
+    borderColor: '#007AFF',
+  },
+  radioButtonInner: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#007AFF',
+  },
+  radioText: {
+    fontSize: 14,
+    color: '#333',
+  },
 }); 

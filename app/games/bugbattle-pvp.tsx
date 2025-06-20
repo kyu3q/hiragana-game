@@ -672,10 +672,6 @@ export default function BugBattlePvP() {
       const playerFramesIndex = isLeft ? i : i - 2;
       generateQuestion(isLeft, playerFramesIndex);
     }
-    // 初期の味方を生成
-    setTimeout(() => {
-      spawnBug(FRAME_BUG_TYPES[1], true); // trueは左プレイヤー
-    }, 100);
   };
 
   // ゲームループの開始
@@ -795,13 +791,54 @@ export default function BugBattlePvP() {
     const currentLeftBugs = leftPlayerRef.current.bugs;
     const currentRightBugs = rightPlayerRef.current.bugs;
     const collidedPairs = new Set<string>();
-    // ...バグ同士の衝突はそのまま...
+    
+    // 虫同士の衝突判定
+    currentLeftBugs.forEach(leftBug => {
+      currentRightBugs.forEach(rightBug => {
+        const pairKey = `${leftBug.id}-${rightBug.id}`;
+        if (!collidedPairs.has(pairKey)) {
+          if (checkCollision(leftBug, rightBug)) {
+            collidedPairs.add(pairKey);
+            
+            // 左プレイヤーの虫の攻撃
+            const leftBugDamage = Math.max(1, leftBug.attack - rightBug.defense);
+            rightBug.hp -= leftBugDamage;
+            
+            // 右プレイヤーの虫の攻撃
+            const rightBugDamage = Math.max(1, rightBug.attack - leftBug.defense);
+            leftBug.hp -= rightBugDamage;
+
+            playAttackAnimation(leftBug.id);
+            playAttackAnimation(rightBug.id);
+            createParticles(
+              (leftBug.x + rightBug.x) / 2,
+              (leftBug.y + rightBug.y) / 2,
+              leftBug.hp <= 0 || rightBug.hp <= 0 ? '#F44336' : '#4CAF50',
+              30,
+              leftBug.hp <= 0 || rightBug.hp <= 0 ? 'failure' : 'success'
+            );
+            playSound(soundsRef.current.collision);
+
+            if (leftBug.hp <= 0) {
+              animateBugDisappearance(leftBug);
+            }
+            if (rightBug.hp <= 0) {
+              animateBugDisappearance(rightBug);
+            }
+            shakeScreen();
+          }
+        }
+      });
+    });
+    
     // タワーとの衝突
-    const BATTLE_AREA_WIDTH = 800; // 例: 800px
     // 衝突したバグIDを記録して多重ダメージを防ぐ
     const bugsToRemove: number[] = [];
     currentLeftBugs.forEach(bug => {
-      if (bug.x > BATTLE_AREA_WIDTH - 100) {
+      // 右タワーとの衝突判定（bugbattle.tsxに合わせて動的計算）
+      const towerRightEdge = screenWidth - (isSmallScreen ? 100 : 40);
+      const collisionOffset = isSmallScreen ? 80 : 120;
+      if (bug.x >= towerRightEdge - collisionOffset) {
         if (!bugsToRemove.includes(bug.id)) {
           updateTowerHp(rightPlayer, setRightPlayer, 3);
           animateBugDisappearance(bug);
@@ -810,7 +847,10 @@ export default function BugBattlePvP() {
       }
     });
     currentRightBugs.forEach(bug => {
-      if (bug.x < 100) {
+      // 左タワーとの衝突判定（bugbattle.tsxに合わせて動的計算）
+      const towerLeftEdge = isSmallScreen ? 80 : 140;
+      const collisionOffset = isSmallScreen ? 20 : 40;
+      if (bug.x <= towerLeftEdge - collisionOffset) {
         if (!bugsToRemove.includes(bug.id)) {
           updateTowerHp(leftPlayer, setLeftPlayer, 3);
           animateBugDisappearance(bug);
@@ -865,16 +905,18 @@ export default function BugBattlePvP() {
   };
 
   // 衝突判定
-  const checkCollision = (bug: Bug, enemy: Enemy) => {
+  const checkCollision = (bug1: Bug, bug2: Bug | Enemy) => {
     // 中心点の距離を計算
-    const dx = bug.x - enemy.x;
-    const dy = bug.y - enemy.y;
+    const dx = bug1.x - bug2.x;
+    const dy = bug1.y - bug2.y;
     const distance = Math.sqrt(dx * dx + dy * dy);
     
     // 虫の大きさを考慮した衝突判定
-    const bugRadius = BUG_SIZES[bug.type] * 0.5;
-    const enemyRadius = ENEMY_SIZES[enemy.type] * 0.5;
-    const collisionThreshold = (bugRadius + enemyRadius) * 1.2;
+    const bug1Radius = BUG_SIZES[bug1.type] * 0.5;
+    const bug2Radius = 'type' in bug2 && bug2.type in BUG_SIZES 
+      ? BUG_SIZES[bug2.type as BugType] * 0.5 
+      : ENEMY_SIZES[bug2.type as EnemyType] * 0.5;
+    const collisionThreshold = (bug1Radius + bug2Radius) * 1.2;
     
     return distance < collisionThreshold;
   };
@@ -1567,36 +1609,6 @@ export default function BugBattlePvP() {
     const maxEnemies = 5;
 
     if (currentEnemyCount >= maxEnemies) return;
-    if (Math.random() > difficulty.enemySpawnRate * 0.7) return;
-    await playSound(soundsRef.current.enemySpawn);
-
-    const enemyTypes = Object.keys(ENEMY_IMAGES) as EnemyType[];
-    const enemyType = enemyTypes[Math.floor(Math.random() * enemyTypes.length)];
-    enemyIdRef.current += 1;
-    const newEnemy: Enemy = {
-      id: enemyIdRef.current,
-      type: enemyType,
-      x: isSmallScreen ? 40 : 100,
-      y: isSmallScreen ? 150 : 280,
-      targetX: 0,
-      targetY: 0,
-      speed: difficulty.enemySpeed * 2.0,
-      rotation: new Animated.Value(0),
-      scale: new Animated.Value(1),
-      hp: 120,
-      maxHp: 120,
-      attack: 15,
-      defense: 10,
-      isPoisoned: false,
-      poisonTimer: null,
-      poisonDamage: 0,
-    };
-
-    // 右プレイヤーの敵を生成
-    setRightPlayer(prev => ({
-      ...prev,
-      enemies: [...prev.enemies, newEnemy]
-    }));
   };
 
   // 敵の更新処理

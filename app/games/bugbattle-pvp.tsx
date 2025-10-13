@@ -196,6 +196,13 @@ const FRAME_BUG_TYPES: Record<number, BugType> = {
   4: 'player2_bug2', // 右2
 };
 
+const FRAME_LANE_POSITIONS: Record<number, number> = {
+  1: isSmallScreen ? 110 : 200,
+  2: isSmallScreen ? 200 : 320,
+  3: isSmallScreen ? 110 : 200,
+  4: isSmallScreen ? 200 : 320,
+};
+
 // 虫の色
 const BUG_COLORS = {
   kabuto: '#8B4513',     // 茶色系
@@ -221,6 +228,11 @@ const getWordLists = (isHiragana: boolean) => isHiragana ? {
 
 // プレイヤーの種類
 type PlayerSide = 'left' | 'right';
+
+const PLAYER_SPAWN_X: Record<PlayerSide, number> = {
+  left: isSmallScreen ? 40 : 100,
+  right: screenWidth - (isSmallScreen ? 160 : 200),
+};
 
 // プレイヤーの状態
 interface PlayerState {
@@ -1157,35 +1169,41 @@ export default function BugBattlePvP() {
 
   // 味方の生成間隔（ミリ秒）
   const BUG_SPAWN_COOLDOWN = 1000; // 1秒間隔
-  const lastBugSpawnTimeRef = useRef<number>(0);
+  const MAX_BUGS_PER_SIDE = 3;
+  const lastBugSpawnTimeRef = useRef<Record<PlayerSide, number>>({
+    left: 0,
+    right: 0,
+  });
 
   // 味方の生成
-  const spawnBug = (bugType: BugType, isLeft: boolean) => {
+  const spawnBug = (bugType: BugType, isLeft: boolean, frameId: number) => {
     if (isGameOverScreen || isGameClearScreen) return;
     
     const now = Date.now();
-    if (now - lastBugSpawnTimeRef.current < BUG_SPAWN_COOLDOWN) {
+    const side: PlayerSide = isLeft ? 'left' : 'right';
+    if (now - lastBugSpawnTimeRef.current[side] < BUG_SPAWN_COOLDOWN) {
       return;
     }
     
-    const currentBugCount = leftPlayer.bugs.length + rightPlayer.bugs.length;
-    const maxBugs = 5;
-    
-    if (currentBugCount >= maxBugs) {
+    const activeBugs = isLeft ? leftPlayer.bugs : rightPlayer.bugs;
+    if (activeBugs.length >= MAX_BUGS_PER_SIDE) {
       return;
     }
 
-    lastBugSpawnTimeRef.current = now;
+    lastBugSpawnTimeRef.current[side] = now;
 
     const difficulty = getCurrentDifficulty();
     bugIdRef.current += 1;
+    const baseLaneY = FRAME_LANE_POSITIONS[frameId] ?? (isSmallScreen ? 150 : 280);
+    const laneJitter = (Math.random() - 0.5) * (isSmallScreen ? 12 : 24);
+    const spawnY = Math.max(0, Math.min(baseLaneY + laneJitter, BATTLE_AREA_HEIGHT - 80));
     const newBug: Bug = {
       id: bugIdRef.current,
       type: bugType,
-      x: isLeft ? (isSmallScreen ? 40 : 100) : (screenWidth - (isSmallScreen ? 200 : 200)),
-      y: isSmallScreen ? 150 : 280,
+      x: PLAYER_SPAWN_X[side],
+      y: spawnY,
       targetX: isLeft ? screenWidth : 0,
-      targetY: 0,
+      targetY: spawnY,
       speed: difficulty.bugSpeed * 2.5,
       rotation: new Animated.Value(1),
       scale: new Animated.Value(1),
@@ -1206,18 +1224,14 @@ export default function BugBattlePvP() {
         ...prev,
         bugs: [...prev.bugs, newBug]
       }));
-      // 左プレイヤー（敵側）の出現音
-      console.log('[spawnBug] enemySpawn sound:', soundsRef.current.enemySpawn);
       playSound(soundsRef.current.enemySpawn);
     } else {
       setRightPlayer(prev => ({
         ...prev,
         bugs: [...prev.bugs, newBug]
       }));
-      // 右プレイヤー（味方側）の出現音
       playSound(soundsRef.current.bugSpawn);
     }
-    console.log('[spawnBug]', { id: newBug.id, type: bugType, x: newBug.x, y: newBug.y, isLeft });
   };
 
   // 問題の生成
@@ -1272,6 +1286,9 @@ export default function BugBattlePvP() {
       // 正解時の演出
       const playerSetter = isLeft ? setLeftPlayer : setRightPlayer;
       playerSetter(prev => {
+        const baseScore = (frame.question?.length ?? 0) * 10;
+        const newConsecutive = prev.consecutiveCorrect + 1;
+        const comboBonus = newConsecutive > 1 ? (newConsecutive - 1) * 5 : 0;
         const newFrames = prev.frames.map((f, idx) =>
           idx === playerFramesIndex
             ? {
@@ -1281,7 +1298,12 @@ export default function BugBattlePvP() {
               }
             : f
         );
-        return { ...prev, frames: newFrames };
+        return { 
+          ...prev,
+          frames: newFrames,
+          score: prev.score + baseScore + comboBonus,
+          consecutiveCorrect: newConsecutive,
+        };
       });
 
       // 正解アニメーション
@@ -1319,7 +1341,7 @@ export default function BugBattlePvP() {
       const bugType = FRAME_BUG_TYPES[globalFrameIndex + 1];
       if (bugType) {
         setTimeout(() => {
-          spawnBug(bugType, isLeft);
+          spawnBug(bugType, isLeft, frame.id);
         }, 500);
       }
       // 6秒後に新しい問題を生成
@@ -1350,7 +1372,11 @@ export default function BugBattlePvP() {
               }
             : f
         );
-        return { ...prev, frames: newFrames };
+        return { 
+          ...prev,
+          frames: newFrames,
+          consecutiveCorrect: 0,
+        };
       });
     }
   };
@@ -1769,6 +1795,26 @@ export default function BugBattlePvP() {
 
         <View style={styles.gameContainer}>
           <View style={styles.gameArea}>
+            <View style={styles.scoreboard}>
+              <View style={[styles.scoreCard, styles.leftScoreCard]}>
+                <Text style={styles.scoreLabel}>🦁 スコア</Text>
+                <Text style={styles.scoreValue}>{leftPlayer.score}</Text>
+                {leftPlayer.consecutiveCorrect >= 2 && (
+                  <Text style={styles.comboBadge}>
+                    {leftPlayer.consecutiveCorrect} COMBO!
+                  </Text>
+                )}
+              </View>
+              <View style={[styles.scoreCard, styles.rightScoreCard]}>
+                <Text style={styles.scoreLabel}>🐶 スコア</Text>
+                <Text style={styles.scoreValue}>{rightPlayer.score}</Text>
+                {rightPlayer.consecutiveCorrect >= 2 && (
+                  <Text style={styles.comboBadge}>
+                    {rightPlayer.consecutiveCorrect} COMBO!
+                  </Text>
+                )}
+              </View>
+            </View>
             <View style={styles.battleArea}>
               {/* 左タワー */}
               <View style={[styles.tower, { left: isSmallScreen ? 0 : 40 }]}> 
@@ -2241,6 +2287,51 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: isSmallScreen ? 20 : 28,
     fontWeight: 'bold',
+  } as TextStyle,
+  scoreboard: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    width: '100%',
+    paddingHorizontal: isSmallScreen ? 16 : 32,
+    marginBottom: isSmallScreen ? 8 : 16,
+  } as ViewStyle,
+  scoreCard: {
+    flex: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.85)',
+    borderRadius: 16,
+    paddingVertical: isSmallScreen ? 8 : 12,
+    paddingHorizontal: isSmallScreen ? 12 : 16,
+    alignItems: 'center',
+    marginHorizontal: isSmallScreen ? 4 : 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 3,
+  } as ViewStyle,
+  leftScoreCard: {
+    borderWidth: 2,
+    borderColor: PLAYER_COLORS.left,
+  } as ViewStyle,
+  rightScoreCard: {
+    borderWidth: 2,
+    borderColor: PLAYER_COLORS.right,
+  } as ViewStyle,
+  scoreLabel: {
+    fontSize: isSmallScreen ? 12 : 14,
+    color: '#555',
+    marginBottom: 4,
+  } as TextStyle,
+  scoreValue: {
+    fontSize: isSmallScreen ? 20 : 28,
+    fontWeight: 'bold',
+    color: '#1c1c1c',
+  } as TextStyle,
+  comboBadge: {
+    marginTop: 4,
+    fontSize: isSmallScreen ? 12 : 14,
+    fontWeight: 'bold',
+    color: '#d84315',
   } as TextStyle,
 
   // 特殊能力ボタン関連

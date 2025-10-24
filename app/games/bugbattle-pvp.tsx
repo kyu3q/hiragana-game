@@ -26,6 +26,38 @@ const { width: rawWidth, height: rawHeight } = Dimensions.get('window');
 const screenWidth = Math.max(rawWidth, rawHeight);
 const screenHeight = Math.min(rawWidth, rawHeight);
 const isSmallScreen =  screenHeight < 768; // 768ptを基準に
+const isTablet = screenHeight >= 768;
+const isLargeTablet = screenHeight >= 900;
+
+const BATTLE_AREA_HEIGHT = (() => {
+  if (isLargeTablet) return 640;
+  if (isTablet) return 560;
+  return isSmallScreen ? 360 : 500;
+})();
+
+const TOWER_HORIZONTAL_PADDING = (() => {
+  if (isLargeTablet) return 80;
+  if (isTablet) return 60;
+  return isSmallScreen ? 12 : 40;
+})();
+
+const TOWER_WIDTH = (() => {
+  if (isLargeTablet) return Math.min(190, screenHeight * 0.22);
+  if (isTablet) return Math.min(160, screenHeight * 0.2);
+  return isSmallScreen ? 90 : 130;
+})();
+
+const TOWER_HEIGHT = (() => {
+  if (isLargeTablet) return Math.min(380, BATTLE_AREA_HEIGHT * 0.85);
+  if (isTablet) return Math.min(320, BATTLE_AREA_HEIGHT * 0.8);
+  return isSmallScreen ? 190 : 300;
+})();
+
+const TOWER_ICON_WIDTH = Math.round(TOWER_WIDTH * 0.9);
+const TOWER_ICON_HEIGHT = Math.round(TOWER_HEIGHT * 0.95);
+const TOWER_COLLISION_BUFFER = Math.max(45, TOWER_WIDTH * 0.3);
+const TOWER_VERTICAL_OFFSET = Math.max(20, BATTLE_AREA_HEIGHT * 0.12);
+const HP_BAR_WIDTH = Math.max(Math.round(TOWER_WIDTH * 0.7), isSmallScreen ? 70 : 120);
 
 // 虫の画像マッピング
 const BUG_IMAGES = {
@@ -76,6 +108,7 @@ interface Bug {
   type: BugType;
   x: number;
   y: number;
+  owner: PlayerSide;
   targetX: number;
   targetY: number;
   speed: number;
@@ -91,6 +124,7 @@ interface Bug {
   isDefenseBoosted: boolean;
   defenseBoostTimer: number | null;
   attack: number; // 攻撃力を追加
+  isRemoving?: boolean;
 }
 
 // 敵の状態
@@ -167,9 +201,6 @@ interface Tower {
   hp: number;
   maxHp: number;
 }
-
-// 敵の出現間隔（ミリ秒）
-const ENEMY_SPAWN_INTERVAL = 2000; // 2秒ごとに敵の出現を試みる
 
 // 1枠分の新しい問題を生成
 const generateSingleQuestion = (usedIndices: number[], currentWordList: string[]): { question: string; letters: string[]; slots: (string | null)[]; usedIndex: number } => {
@@ -253,9 +284,6 @@ const PLAYER_COLORS = {
 
 // 型定義を追加
 type GameType = 'shiritori' | 'memory' | 'bugbattle' | 'bugbattle-pvp';
-
-// バトルエリアの高さを定義
-const BATTLE_AREA_HEIGHT = isSmallScreen ? 350 : 500;
 
 export default function BugBattlePvP() {
   const router = useRouter();
@@ -803,10 +831,24 @@ export default function BugBattlePvP() {
     const currentLeftBugs = leftPlayerRef.current.bugs;
     const currentRightBugs = rightPlayerRef.current.bugs;
     const collidedPairs = new Set<string>();
+    const leftTowerBounds = {
+      start: TOWER_HORIZONTAL_PADDING,
+      end: TOWER_HORIZONTAL_PADDING + TOWER_WIDTH,
+    };
+    const rightTowerBounds = {
+      start: screenWidth - TOWER_HORIZONTAL_PADDING - TOWER_WIDTH,
+      end: screenWidth - TOWER_HORIZONTAL_PADDING,
+    };
     
     // 虫同士の衝突判定
     currentLeftBugs.forEach(leftBug => {
+      if (leftBug.isRemoving) {
+        return;
+      }
       currentRightBugs.forEach(rightBug => {
+        if (rightBug.isRemoving) {
+          return;
+        }
         const pairKey = `${leftBug.id}-${rightBug.id}`;
         if (!collidedPairs.has(pairKey)) {
           if (checkCollision(leftBug, rightBug)) {
@@ -847,10 +889,12 @@ export default function BugBattlePvP() {
     // 衝突したバグIDを記録して多重ダメージを防ぐ
     const bugsToRemove: number[] = [];
     currentLeftBugs.forEach(bug => {
-      // 右タワーとの衝突判定（bugbattle.tsxに合わせて動的計算）
-      const towerRightEdge = screenWidth - (isSmallScreen ? 100 : 40);
-      const collisionOffset = isSmallScreen ? 80 : 120;
-      if (bug.x >= towerRightEdge - collisionOffset) {
+      if (bug.isRemoving) {
+        return;
+      }
+      const bugWidth = BUG_SIZES[bug.type];
+      const bugCenterX = bug.x + bugWidth * 0.5;
+      if (bugCenterX >= rightTowerBounds.start - TOWER_COLLISION_BUFFER) {
         if (!bugsToRemove.includes(bug.id)) {
           updateTowerHp(rightPlayer, setRightPlayer, 3);
           animateBugDisappearance(bug);
@@ -859,10 +903,12 @@ export default function BugBattlePvP() {
       }
     });
     currentRightBugs.forEach(bug => {
-      // 左タワーとの衝突判定（bugbattle.tsxに合わせて動的計算）
-      const towerLeftEdge = isSmallScreen ? 80 : 140;
-      const collisionOffset = isSmallScreen ? 20 : 40;
-      if (bug.x <= towerLeftEdge - collisionOffset) {
+      if (bug.isRemoving) {
+        return;
+      }
+      const bugWidth = BUG_SIZES[bug.type];
+      const bugCenterX = bug.x + bugWidth * 0.5;
+      if (bugCenterX <= leftTowerBounds.end + TOWER_COLLISION_BUFFER) {
         if (!bugsToRemove.includes(bug.id)) {
           updateTowerHp(leftPlayer, setLeftPlayer, 3);
           animateBugDisappearance(bug);
@@ -944,6 +990,8 @@ export default function BugBattlePvP() {
     // 画面を揺らす
     shakeScreen();
 
+    bug.isRemoving = true;
+
     Animated.parallel([
       Animated.timing(bug.scale, {
         toValue: 0,
@@ -958,7 +1006,7 @@ export default function BugBattlePvP() {
     ]).start(() => {
       // アニメーション完了後に状態を更新
       requestAnimationFrame(() => {
-        if (bug.x < screenWidth / 2) {
+        if (bug.owner === 'left') {
           setLeftPlayer(prev => ({
             ...prev,
             bugs: prev.bugs.filter(b => b.id !== bug.id)
@@ -1169,7 +1217,7 @@ export default function BugBattlePvP() {
 
   // 味方の生成間隔（ミリ秒）
   const BUG_SPAWN_COOLDOWN = 1000; // 1秒間隔
-  const MAX_BUGS_PER_SIDE = 3;
+  const MAX_BUGS_PER_SIDE = 6;
   const lastBugSpawnTimeRef = useRef<Record<PlayerSide, number>>({
     left: 0,
     right: 0,
@@ -1196,10 +1244,12 @@ export default function BugBattlePvP() {
     bugIdRef.current += 1;
     const baseLaneY = FRAME_LANE_POSITIONS[frameId] ?? (isSmallScreen ? 150 : 280);
     const laneJitter = (Math.random() - 0.5) * (isSmallScreen ? 12 : 24);
-    const spawnY = Math.max(0, Math.min(baseLaneY + laneJitter, BATTLE_AREA_HEIGHT - 80));
+    const maxSpawnY = BATTLE_AREA_HEIGHT - Math.max(100, TOWER_VERTICAL_OFFSET + 40);
+    const spawnY = Math.max(0, Math.min(baseLaneY + laneJitter, maxSpawnY));
     const newBug: Bug = {
       id: bugIdRef.current,
       type: bugType,
+      owner: side,
       x: PLAYER_SPAWN_X[side],
       y: spawnY,
       targetX: isLeft ? screenWidth : 0,
@@ -1217,6 +1267,7 @@ export default function BugBattlePvP() {
       isDefenseBoosted: false,
       defenseBoostTimer: null,
       attack: 15,
+      isRemoving: false,
     };
 
     if (isLeft) {
@@ -1344,7 +1395,7 @@ export default function BugBattlePvP() {
           spawnBug(bugType, isLeft, frame.id);
         }, 500);
       }
-      // 6秒後に新しい問題を生成
+      // 2秒後に新しい問題を生成
       setTimeout(() => {
         playerSetter(prev => {
           const newFrames = prev.frames.map((f, idx) =>
@@ -1358,7 +1409,7 @@ export default function BugBattlePvP() {
           return { ...prev, frames: newFrames };
         });
         generateQuestion(isLeft, playerFramesIndex);
-      }, 6000);
+      }, 2000);
     } else {
       // 不正解時の処理
       const playerSetter = isLeft ? setLeftPlayer : setRightPlayer;
@@ -1481,9 +1532,8 @@ export default function BugBattlePvP() {
     }
 
     bug.lastAbilityUse = now;
-    // 左右どちらの虫かで敵を正しく選択
-    const isLeftBug = leftPlayer.bugs.some(b => b.id === bug.id);
-    bug.ability.effect(bug, isLeftBug ? leftPlayer.enemies : rightPlayer.enemies);
+    const targetEnemies = bug.owner === 'left' ? rightPlayer.enemies : leftPlayer.enemies;
+    bug.ability.effect(bug, targetEnemies);
   };
 
   // 特殊能力の定義
@@ -1577,7 +1627,7 @@ export default function BugBattlePvP() {
           return enemy;
         });
         // 敵の位置に基づいて適切なプレイヤーの状態を更新
-        if (bug.x < screenWidth / 2) {
+        if (bug.owner === 'left') {
           setRightPlayer(prev => ({ ...prev, enemies: updatedEnemies }));
         } else {
           setLeftPlayer(prev => ({ ...prev, enemies: updatedEnemies }));
@@ -1679,7 +1729,10 @@ export default function BugBattlePvP() {
   };
 
   // バトルエリアの虫・敵のy座標を制限
-  const clampY = (y: number) => Math.max(0, Math.min(y, BATTLE_AREA_HEIGHT - 80));
+  const clampY = (y: number) => {
+    const lowerBound = BATTLE_AREA_HEIGHT - Math.max(100, TOWER_VERTICAL_OFFSET + 40);
+    return Math.max(0, Math.min(y, lowerBound));
+  };
 
   if (showResult) {
     const bounceStyle = {
@@ -1817,7 +1870,7 @@ export default function BugBattlePvP() {
             </View>
             <View style={styles.battleArea}>
               {/* 左タワー */}
-              <View style={[styles.tower, { left: isSmallScreen ? 0 : 40 }]}> 
+              <View style={[styles.tower, { left: TOWER_HORIZONTAL_PADDING }]}> 
                 <View style={styles.hpBarOuter}>
                   <View style={[styles.hpBarImproved, {
                     width: `${(leftPlayer.tower.hp / leftPlayer.tower.maxHp) * 100}%`,
@@ -1837,13 +1890,13 @@ export default function BugBattlePvP() {
                   borderRadius: 20,
                 }}>
                   <View style={styles.towerEmojiContainer}>
-                    <OrangeCastleIcon width={isSmallScreen ? 80 : 120} height={isSmallScreen ? 130 : 280} />
+                    <OrangeCastleIcon width={TOWER_ICON_WIDTH} height={TOWER_ICON_HEIGHT} />
                   </View>
                 </Animated.View>
               </View>
 
               {/* 右タワー */}
-              <View style={[styles.tower, { right: isSmallScreen ? 0 : 40 }]}> 
+              <View style={[styles.tower, { right: TOWER_HORIZONTAL_PADDING }]}> 
                 <View style={styles.hpBarOuter}>
                   <View style={[styles.hpBarImproved, {
                     width: `${(rightPlayer.tower.hp / rightPlayer.tower.maxHp) * 100}%`,
@@ -1863,7 +1916,7 @@ export default function BugBattlePvP() {
                   borderRadius: 20,
                 }}>
                   <View style={styles.towerEmojiContainer}>
-                    <BugCastleIcon width={isSmallScreen ? 80 : 120} height={isSmallScreen ? 130 : 280} />
+                    <BugCastleIcon width={TOWER_ICON_WIDTH} height={TOWER_ICON_HEIGHT} />
                   </View>
                 </Animated.View>
               </View>
@@ -2123,7 +2176,7 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    height: 500,
+    height: BATTLE_AREA_HEIGHT,
     zIndex: 1,
     overflow: 'visible',
   } as ViewStyle,
@@ -2131,12 +2184,12 @@ const styles = StyleSheet.create({
   // タワー関連
   tower: {
     position: 'absolute',
-    width: 100,
-    height: isSmallScreen ? 160 : 300,
+    width: TOWER_WIDTH,
+    height: TOWER_HEIGHT,
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 2,
-    top: isSmallScreen ? 40 : 80,
+    top: TOWER_VERTICAL_OFFSET,
   } as ViewStyle,
   towerEmojiContainer: {
     justifyContent: 'center',
@@ -2144,7 +2197,7 @@ const styles = StyleSheet.create({
   } as ViewStyle,
   hpBarOuter: {
     position: 'relative',
-    width: isSmallScreen ? 60 : 110,
+    width: HP_BAR_WIDTH,
     height: isSmallScreen ? 18 : 22,
     backgroundColor: 'rgba(0, 0, 0, 0.1)',
     borderRadius: isSmallScreen ? 9 : 11,
